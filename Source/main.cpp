@@ -20,10 +20,12 @@ typedef struct _MeshData
 	vector<float> positions;
 	vector<float> normals;
 	vector<float> texcoords;
+	vector<unsigned int> indices;
 	int vertexCount;
 	int material_id;
 	GLuint vao;
 	GLuint vbo;
+	GLuint ebo;
 	GLuint tex;
 } MeshData;
 
@@ -39,22 +41,21 @@ struct Program
 	GLuint rbo;
 
 	GLuint tex_loc;
-
-	vector<MeshData> meshes;
 };
+vector<MeshData> scene, trice;
 
 struct Program modelProg;
 GLuint tex_array[8];
 
-vec3 eye_pos = vec3(0.0f, 0.0f, 0.0f);
-vec3 look_dir = vec3(-1.0f, -1.0f, 0.0f);
+vec3 eye_pos = vec3(2.66618f, 1.01052f, -2.44763f);
+vec3 look_dir = vec3(-2.66618f, -1.01052f, 2.44763f);
 vec3 cam_up = vec3(0.0f, 1.0f, 0.0f);
 
 int window_width;
 int window_height;
 /********** Global Variables Bottom **********/
 
-vector<MeshData> My_LoadModel(const char* modelFile, const char* materialDir, struct Program &prog)
+vector<MeshData> My_LoadModel(const char* modelFile, const char* materialDir)
 {
 	tinyobj::attrib_t attrib;
 	vector<tinyobj::shape_t> shapes;
@@ -68,6 +69,8 @@ vector<MeshData> My_LoadModel(const char* modelFile, const char* materialDir, st
 
 	vector<MeshData> meshes;
 	for (int s = 0; s < shapes.size(); ++s) {  // for 'ladybug.obj', there is only one object
+		//for (int x = 0; x < shapes.at(s).mesh.num_face_vertices.size(); x++) { cout << shapes.at(s).mesh.num_face_vertices.at(x); }
+		//cout << endl;
 		MeshData mesh;
 		int index_offset = 0;
 		for (int f = 0; f < shapes.at(s).mesh.num_face_vertices.size(); ++f) {
@@ -88,6 +91,7 @@ vector<MeshData> My_LoadModel(const char* modelFile, const char* materialDir, st
 					mesh.normals.push_back(attrib.normals.at(3 * idx.normal_index + 1));
 					mesh.normals.push_back(attrib.normals.at(3 * idx.normal_index + 2));
 				}
+				mesh.indices.push_back(index_offset + v);
 			}
 			index_offset += fv;
 		}
@@ -112,11 +116,17 @@ vector<MeshData> My_LoadModel(const char* modelFile, const char* materialDir, st
 		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)(mesh.positions.size() * sizeof(float) + mesh.texcoords.size() * sizeof(float)));
 		glEnableVertexAttribArray(2);
 
+		glBindVertexArray(0);
+
+		glGenBuffers(1, &mesh.ebo);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(unsigned int), mesh.indices.data(), GL_STATIC_DRAW);
+
 		if ((mesh.material_id >= 4 && mesh.material_id <= 7) || mesh.material_id == 14 || mesh.material_id == 16 || mesh.material_id == 17 || mesh.material_id == 21)
 		{
-			cout << materials.at(mesh.material_id).diffuse_texname.c_str() << endl;
+			// cout << materials.at(mesh.material_id).diffuse_texname.c_str() << endl;
 			texture_data tdata = loadImg(materials.at(mesh.material_id).diffuse_texname.c_str());
-			cout << tdata.width << ", " << tdata.height << endl;
+			// cout << tdata.width << ", " << tdata.height << endl;
 
 			glGenTextures(1, &mesh.tex);
 			glActiveTexture(GL_TEXTURE0);
@@ -130,6 +140,7 @@ vector<MeshData> My_LoadModel(const char* modelFile, const char* materialDir, st
 
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
+		else mesh.tex = 0;
 
 		meshes.push_back(mesh);
 
@@ -194,8 +205,10 @@ void My_Init()
 	modelProg.v_mat = glGetUniformLocation(modelProg.prog, "v_mat");
 	modelProg.p_mat = glGetUniformLocation(modelProg.prog, "p_mat");
 	modelProg.tex_loc = glGetUniformLocation(modelProg.prog, "tex");
+	glGetUniformLocation(modelProg.prog, "default_tex");
 
-	modelProg.meshes = My_LoadModel("./indoor_models_release/Grey_White_Room.obj", "./indoor_models_release/", modelProg);
+	scene = My_LoadModel("./indoor_models_release/Grey_White_Room.obj", "./indoor_models_release/");
+	trice = My_LoadModel("./indoor_models_release/trice.obj", "./indoor_models_release/");
 
 	printGLError();
 }
@@ -205,22 +218,54 @@ void My_Display()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	view_matrix = lookAt(eye_pos, eye_pos + look_dir, cam_up);
-	mat4 m_matrix = scale((translate(mat4(1.0f), vec3(-10, -13, -8))), vec3(0.5, 0.35, 0.5));
-	m_matrix = rotate(m_matrix, 0.0f, vec3(0.0f, 1.0f, 0.0f)); // rotate
 
 	glUseProgram(modelProg.prog);
-	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(m_matrix));
+	/***** Start Render Scene *****/
+	mat4 scene_m_matrix = mat4(1.0f);
+	scene_m_matrix = rotate(scene_m_matrix, 0.0f, vec3(0.0f, 1.0f, 0.0f)); // rotate
+	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
 	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
 	glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 0);
 	glUniform1i(modelProg.tex_loc, 0);
-	for (int i = 0; i < modelProg.meshes.size(); i++) {
-		MeshData mesh = modelProg.meshes.at(i);
+	for (int i = 0; i < scene.size(); i++) {
+		MeshData mesh = scene.at(i);
+
 		glBindVertexArray(mesh.vao);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, mesh.tex);
 
-		glDrawArrays(GL_TRIANGLES, 0, modelProg.meshes.at(i).vertexCount);
+		if (mesh.tex == 0) glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 1);
+		else glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+		glDrawElements(GL_TRIANGLES, mesh.vertexCount, GL_UNSIGNED_INT, 0);
+		// glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(0);
 	}
+	/***** End Render Scene *****/
+
+	/***** Start Render Trice *****/
+	mat4 trice_m_matrix = mat4(1.0f);
+	 trice_m_matrix = translate(trice_m_matrix, vec3(2.05f, 0.628725f, -1.9f));
+	 trice_m_matrix = scale(trice_m_matrix, vec3(0.001f));
+	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
+	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+	glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 1);
+
+	for (int i = 0; i < trice.size(); i++) {
+		MeshData mesh = trice.at(i);
+
+		glBindVertexArray(mesh.vao);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+		glDrawElements(GL_TRIANGLES, mesh.vertexCount, GL_UNSIGNED_INT, 0);
+		// glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount);
+		glBindVertexArray(0);
+	}
+
+	/***** End Render Trice *****/
 
 	glutSwapBuffers();
 }
