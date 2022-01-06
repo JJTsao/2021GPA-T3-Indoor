@@ -48,15 +48,16 @@ struct Program
 struct Program modelProg;
 GLuint tex_array[8];
 
-vec3 eye_pos = vec3(0.0f, 0.0f, 0.0f);
-vec3 look_dir = vec3(-1.0f, -1.0f, 0.0f);
+vec3 eye_pos = vec3(2.66618f, 1.01052f, -2.44763f);
+vec3 look_dir = vec3(-2.66618f, -1.01052f, 2.44763f);
 vec3 cam_up = vec3(0.0f, 1.0f, 0.0f);
 
 int window_width;
 int window_height;
 
 Model model, trice;
-
+GLuint trice_normal_map;
+int normal_mapping_flag = 0;
 /********** Global Variables Bottom **********/
 
 vector<MeshData> My_LoadModel(const char* modelFile, const char* materialDir, struct Program &prog)
@@ -203,7 +204,21 @@ void My_Init()
 
 	// modelProg.meshes = My_LoadModel("./indoor_models_release/Grey_White_Room.obj", "./indoor_models_release/", modelProg);
 	model.loadModel("../Assets/indoor_models_release/Grey_White_Room.obj");
-	// trice.loadModel("../Assets/indoor_models_release/trice.obj");
+	trice.loadModel("../Assets/indoor_models_release/trice.obj");
+
+	texture_data tdata = loadImg("./indoor_models_release/tricnorm.jpg");
+
+	glGenTextures(1, &trice_normal_map);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, trice_normal_map);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, tdata.width, tdata.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tdata.data);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
 
 	printGLError();
 }
@@ -213,17 +228,51 @@ void My_Display()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	view_matrix = lookAt(eye_pos, eye_pos + look_dir, cam_up);
-	//mat4 m_matrix = scale((translate(mat4(1.0f), vec3(-10, -13, -8))), vec3(0.5, 0.35, 0.5));
-	mat4 m_matrix = translate(mat4(1.0f), vec3(-10, -13, -8));
-	m_matrix = rotate(m_matrix, 0.0f, vec3(0.0f, 1.0f, 0.0f)); // rotate
 
 	glUseProgram(modelProg.prog);
-	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(m_matrix));
+	/***** Start Render Scene *****/
+	mat4 scene_m_matrix = mat4(1.0f);
+
+	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
 	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
 	glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
-	// glUniform1i(modelProg.tex_loc, 0);
-	model.draw(modelProg.prog);
-	// trice.draw(modelProg.prog);
+	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 0);
+	// model.draw(modelProg.prog);
+	
+	for (int i = 0; i < model.meshes.size(); i++) {
+		Mesh mesh = model.meshes.at(i);
+		glBindVertexArray(mesh.vao);
+
+		if(mesh.textures.size() == 0) glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 1);
+		else {
+			glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 0);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, mesh.textures.at(0).id);
+			glUniform1i(glGetUniformLocation(modelProg.prog, "tex"), 0);
+		}
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+		glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindVertexArray(0);
+	}
+	/***** End Render Scene *****/
+	
+	/***** Start Render Trice *****/
+	mat4 trice_m_matrix = mat4(1.0f);
+	trice_m_matrix = translate(trice_m_matrix, vec3(2.05f, 0.628725f, -1.9f));
+	trice_m_matrix = scale(trice_m_matrix, vec3(0.001f));
+	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
+	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+	glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 1);
+	glUniform1i(glGetUniformLocation(modelProg.prog, "normal_mapping_flag"), normal_mapping_flag);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, trice_normal_map);
+	glUniform1i(glGetUniformLocation(modelProg.prog, "trice_normal"), 1);
+
+	trice.draw(modelProg.prog);
 
 	glutSwapBuffers();
 }
@@ -264,11 +313,11 @@ void My_Keyboard(unsigned char key, int x, int y)
 	{
 	case 'w':
 	case 'W':
-		eye_pos += (look_dir);
+		eye_pos += 0.1f * (look_dir);
 		break;
 	case 's':
 	case 'S':
-		eye_pos += (-look_dir);
+		eye_pos += 0.1f * (-look_dir);
 		break;
 	case 'a':
 	case 'A':
@@ -282,11 +331,15 @@ void My_Keyboard(unsigned char key, int x, int y)
 		break;
 	case 'z':
 	case 'Z':
-		eye_pos += (cam_up);
+		eye_pos += 0.1f * (cam_up);
 		break;
 	case 'x':
 	case 'X':
-		eye_pos += (-cam_up);
+		eye_pos += 0.1f * (-cam_up);
+		break;
+	case 'n':
+	case 'N':
+		normal_mapping_flag = !normal_mapping_flag;
 		break;
 	}
 }

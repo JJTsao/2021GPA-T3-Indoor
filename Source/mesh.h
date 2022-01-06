@@ -6,6 +6,8 @@ struct Vertex
 	glm::vec3 position;
 	glm::vec2 texcoord;
 	glm::vec3 normal;
+	glm::vec3 tangent;
+	glm::vec3 bitangent;
 };
 
 struct Texture 
@@ -31,7 +33,9 @@ public:
 			glUniform1i(glGetUniformLocation(program, "tex"), 0);
 		}
 
+		// glDrawArrays(GL_TRIANGLES, 0, this->vertData.size());
 		glDrawElements(GL_TRIANGLES, this->indices.size(), GL_UNSIGNED_INT, 0);
+		glBindTexture(GL_TEXTURE_2D, 0); // JJ
 		glBindVertexArray(0);
 		glUseProgram(0);
 	}
@@ -77,8 +81,10 @@ public:
 		glEnableVertexAttribArray(1);
 		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(5 * sizeof(GL_FLOAT)));
 		glEnableVertexAttribArray(2);
-
-		std::cout << this->indices.size() << std::endl;
+		glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(8 * sizeof(GL_FLOAT)));
+		glEnableVertexAttribArray(3);
+		glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(11 * sizeof(GL_FLOAT)));
+		glEnableVertexAttribArray(4);
 
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * this->indices.size(), &this->indices[0], GL_STATIC_DRAW);

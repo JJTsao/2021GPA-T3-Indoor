@@ -13,7 +13,7 @@ public:
 		Assimp::Importer importer;
 
 		// const aiScene *secne_obj_ptr = aiImportFile(filepath.c_str(), aiProcessPreset_TargetRealtime_MaxQuality);
-		const aiScene* secne_obj_ptr = importer.ReadFile(filepath, aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_CalcTangentSpace);
+		const aiScene* secne_obj_ptr = importer.ReadFile(filepath, aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace);
 		if (!secne_obj_ptr || secne_obj_ptr->mFlags == AI_SCENE_FLAGS_INCOMPLETE || !secne_obj_ptr->mRootNode)
 			return false;
 
@@ -78,6 +78,15 @@ private:
 				vertex.normal.z = mesh_ptr->mNormals[i].z;
 			} 
 
+			if (mesh_ptr->HasTangentsAndBitangents()) {
+				vertex.tangent.x = mesh_ptr->mTangents[i].x;
+				vertex.tangent.y = mesh_ptr->mTangents[i].y;
+				vertex.tangent.z = mesh_ptr->mTangents[i].z;
+				vertex.bitangent.x = mesh_ptr->mBitangents[i].x;
+				vertex.bitangent.y = mesh_ptr->mBitangents[i].y;
+				vertex.bitangent.z = mesh_ptr->mBitangents[i].z;
+			}
+
 			vertData.push_back(vertex);
 		}
 
@@ -113,6 +122,7 @@ private:
 			return true;
 		
 		for (size_t i = 0; i < matPtr->GetTextureCount(textureType); i++) {
+			
 			Texture text;
 			aiString textPath;
 			aiReturn retStatus = matPtr->GetTexture(textureType, i, &textPath);
@@ -120,12 +130,13 @@ private:
 				continue;
 			
 			std::string image_path = this->model_file_dir + "/" + textPath.C_Str();
+			
 			auto it = this->loadedTextureMap.find(image_path);
 			if(it == this->loadedTextureMap.end()) {
 				// Loading Texture
 				texture_data tdata = loadImg(image_path.c_str());
-
-				std::cout << "[Loading \"" << image_path << "\" Texture] width: " << tdata.width << ", height: " << tdata.height << std::endl;
+				
+				// std::cout << "[Loading \"" << image_path << "\" Texture] width: " << tdata.width << ", height: " << tdata.height << std::endl;
 
 				// Generate Texture 
 				glGenTextures(1, &text.id);
@@ -144,12 +155,13 @@ private:
 				
 				delete tdata.data;
 			}
-			else
+			else {
 				textures.push_back(it->second);
+			}
 		}
 		return true;
 	}
-private:
+public:
 	std::vector<Mesh> meshes; 
 	std::string model_file_dir;
 	std::map<std::string, Texture> loadedTextureMap;

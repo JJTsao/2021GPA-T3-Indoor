@@ -12,4 +12,6 @@ A / D: Rotate Camera left / right
 
 Z / X: Move Camera up / down
 
+N: Enable / Disable normal mapping effect on trice
+
 Feel free to ask me if you have any question :) 
