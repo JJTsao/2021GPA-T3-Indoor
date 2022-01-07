@@ -10,6 +10,13 @@ struct Vertex
 	glm::vec3 bitangent;
 };
 
+struct Material
+{
+	glm::vec3 Ka;
+	glm::vec3 Kd;
+	glm::vec3 Ks;
+};
+
 struct Texture 
 {
 	GLuint id;
@@ -40,14 +47,15 @@ public:
 		glUseProgram(0);
 	}
 	Mesh(): vao(0), vbo(0), ebo(0) { }
-	Mesh(const std::vector<Vertex>& vertData, const std::vector<Texture>& textures, const std::vector<GLuint>& indices)
+	Mesh(const std::vector<Vertex>& vertData, const std::vector<Texture>& textures, const std::vector<GLuint>& indices, const Material mats)
 		:vao(0), vbo(0), ebo(0) {
-		setup(vertData, textures, indices);
+		setup(vertData, textures, indices, mats);
 	}
-	void setup(const std::vector<Vertex>& vertData, const std::vector<Texture> & textures, const std::vector<GLuint>& indices) {
+	void setup(const std::vector<Vertex>& vertData, const std::vector<Texture> & textures, const std::vector<GLuint>& indices, const Material mats) {
 		this->vertData = vertData;
 		this->indices = indices;
 		this->textures = textures;
+		this->mats = mats;
 		if (!vertData.empty() && !indices.empty())
 			this->setupMesh();
 	}
@@ -62,6 +70,7 @@ public:
 	std::vector<Vertex> vertData;
 	std::vector<GLuint> indices;
 	std::vector<Texture> textures;
+	Material mats;
 	GLuint vao;
 	GLuint vbo;
 	GLuint ebo;

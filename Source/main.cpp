@@ -220,6 +220,8 @@ void My_Init()
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 
+	// cout << trice.meshes.at(0).vertData.at(0).normal.x << endl;
+
 	printGLError();
 }
 
@@ -242,8 +244,13 @@ void My_Display()
 	for (int i = 0; i < model.meshes.size(); i++) {
 		Mesh mesh = model.meshes.at(i);
 		glBindVertexArray(mesh.vao);
+		glUniform3fv(glGetUniformLocation(modelProg.prog, "Ka"), 1, value_ptr(mesh.mats.Ka));
+		glUniform3fv(glGetUniformLocation(modelProg.prog, "Kd"), 1, value_ptr(mesh.mats.Kd));
+		glUniform3fv(glGetUniformLocation(modelProg.prog, "Ks"), 1, value_ptr(mesh.mats.Ks));
 
-		if(mesh.textures.size() == 0) glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 1);
+		if (mesh.textures.size() == 0) {
+			glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 1);
+		}
 		else {
 			glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 0);
 			glActiveTexture(GL_TEXTURE0);
@@ -265,6 +272,10 @@ void My_Display()
 	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
 	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
 	glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+	Mesh trice_mesh = trice.meshes.at(0);
+	glUniform3fv(glGetUniformLocation(modelProg.prog, "Ka"), 1, value_ptr(trice_mesh.mats.Ka));
+	glUniform3fv(glGetUniformLocation(modelProg.prog, "Kd"), 1, value_ptr(trice_mesh.mats.Kd));
+	glUniform3fv(glGetUniformLocation(modelProg.prog, "Ks"), 1, value_ptr(trice_mesh.mats.Ks));
 	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 1);
 	glUniform1i(glGetUniformLocation(modelProg.prog, "normal_mapping_flag"), normal_mapping_flag);
 

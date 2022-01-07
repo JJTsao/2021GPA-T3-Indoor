@@ -30,10 +30,10 @@ void main()
 	vec3 T = normalize(mat3(v_mat * m_mat) * tangent);
 	vec3 N = normalize(mat3(v_mat * m_mat) * iv3normal);
 	vec3 B = normalize(mat3(v_mat * m_mat) * bitangent);
-	vec3 L = directional_light_pos - pos_vs.xyz;
+	vec3 L = mat3(v_mat) * directional_light_pos - pos_vs.xyz;
 	vec3 V = -pos_vs.xyz;
 	
-	vertexData.normal = iv3normal;
+	vertexData.normal = iv3normal; // no use
     vertexData.texcoord = iv2tex_coord;
 
 	vertexData.N = mat3(v_mat * m_mat) * iv3normal;

@@ -100,6 +100,18 @@ private:
 		
 		}
 
+		// process materials
+		aiMaterial* material = sceneObjPtr->mMaterials[mesh_ptr->mMaterialIndex];
+		Material mats;
+		aiColor3D color;
+
+		material->Get(AI_MATKEY_COLOR_AMBIENT, color);
+		mats.Ka = glm::vec3(color.r, color.g, color.b);
+		material->Get(AI_MATKEY_COLOR_DIFFUSE, color);
+		mats.Kd = glm::vec3(color.r, color.g, color.b);
+		material->Get(AI_MATKEY_COLOR_SPECULAR, color);
+		mats.Ks = glm::vec3(color.r, color.g, color.b);
+
 		if (mesh_ptr->mMaterialIndex >= 0) {
 			const aiMaterial* materialPtr = sceneObjPtr->mMaterials[mesh_ptr->mMaterialIndex];
 			
@@ -107,7 +119,7 @@ private:
 			this->processMaterial(materialPtr, sceneObjPtr, aiTextureType_DIFFUSE, diffuseTexture);
 			textures.insert(textures.end(), diffuseTexture.begin(), diffuseTexture.end());
 		}
-		meshObj.setup(vertData, textures, indices);
+		meshObj.setup(vertData, textures, indices, mats);
 		return true;
 	}
 	
@@ -136,7 +148,7 @@ private:
 				// Loading Texture
 				texture_data tdata = loadImg(image_path.c_str());
 				
-				// std::cout << "[Loading \"" << image_path << "\" Texture] width: " << tdata.width << ", height: " << tdata.height << std::endl;
+				std::cout << "[Loading \"" << image_path << "\" Texture] width: " << tdata.width << ", height: " << tdata.height << std::endl;
 
 				// Generate Texture 
 				glGenTextures(1, &text.id);
