@@ -8,7 +8,7 @@ Download the Framework and **Only Update the main.cpp & shader files to git**
 ### Keyboard
 W / S: Move Camera forward / backward
 
-A / D: Rotate Camera left / right
+Drag the left mouse button: Rotate Camera's viewing angle
 
 Z / X: Move Camera up / down
 

@@ -22,9 +22,9 @@ in VertexData
 
 out vec4 fragColor;
 
-float specular_power = 128.0;
-vec3 Ia = vec3(0.45);
-vec3 Id = vec3(0.45);
+float specular_power = 225.0;
+vec3 Ia = vec3(0.2);
+vec3 Id = vec3(0.7);
 vec3 Is = vec3(0.1);
 
 void main()
@@ -50,7 +50,8 @@ void main()
 		if(default_tex == 0) 
 		{
 			if(texture(tex, vertexData.texcoord).a < 0.1) discard;
-			fragColor = vec4( Ka * Ia + tex_diffuse + Ks * Is * pow(max(dot(R, V), 0.0), specular_power) , 1.0f);
+			// Ka = map_Kd for this project
+			fragColor = vec4( texture(tex, vertexData.texcoord).rgb * Ia + tex_diffuse + Ks * Is * pow(max(dot(R, V), 0.0), specular_power) , 1.0f);
 		}
 		else if(default_tex == 1) fragColor = vec4( Ka * Ia + Kd * Id * max(dot(N, L), 0.0) + Ks * Is * pow(max(dot(R, V), 0.0), specular_power) , 1.0f);
 	}

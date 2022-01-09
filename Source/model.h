@@ -118,6 +118,10 @@ private:
 			std::vector<Texture> diffuseTexture;
 			this->processMaterial(materialPtr, sceneObjPtr, aiTextureType_DIFFUSE, diffuseTexture);
 			textures.insert(textures.end(), diffuseTexture.begin(), diffuseTexture.end());
+
+			std::vector<Texture> normalTexture;
+			this->processMaterial(materialPtr, sceneObjPtr, aiTextureType_NORMALS, normalTexture);
+			textures.insert(textures.end(), normalTexture.begin(), normalTexture.end());
 		}
 		meshObj.setup(vertData, textures, indices, mats);
 		return true;
@@ -142,13 +146,14 @@ private:
 				continue;
 			
 			std::string image_path = this->model_file_dir + "/" + textPath.C_Str();
+			std::cout << image_path << std::endl;
 			
 			auto it = this->loadedTextureMap.find(image_path);
 			if(it == this->loadedTextureMap.end()) {
 				// Loading Texture
 				texture_data tdata = loadImg(image_path.c_str());
 				
-				std::cout << "[Loading \"" << image_path << "\" Texture] width: " << tdata.width << ", height: " << tdata.height << std::endl;
+				// std::cout << "[Loading \"" << image_path << "\" Texture] width: " << tdata.width << ", height: " << tdata.height << std::endl;
 
 				// Generate Texture 
 				glGenTextures(1, &text.id);
