@@ -9,6 +9,7 @@ layout(location = 4) in vec3 bitangent;
 uniform mat4 m_mat;
 uniform mat4 v_mat;
 uniform mat4 p_mat;
+uniform mat4 shadow_matrix;
 
 vec3 directional_light_pos = vec3(-2.51449f, 0.477241f, -1.21263f);
 
@@ -21,6 +22,7 @@ out VertexData
 	vec3 V;
 	vec3 eyeDir;
 	vec3 lightDir;
+	vec4 shadow_coord;
 } vertexData;
 
 void main()
@@ -31,6 +33,7 @@ void main()
 	vec3 N = normalize(mat3(v_mat * m_mat) * iv3normal);
 	vec3 B = normalize(mat3(v_mat * m_mat) * bitangent);
 	vec3 L = mat3(v_mat) * directional_light_pos - pos_vs.xyz;
+	// vec3 V = mat3(v_mat) * (-pos_vs.xyz);
 	vec3 V = -pos_vs.xyz;
 	
 	vertexData.normal = iv3normal; // no use
@@ -42,6 +45,8 @@ void main()
 
 	vertexData.eyeDir = normalize( vec3( dot(V, T), dot(V, B), dot(V, N) ) );
 	vertexData.lightDir = normalize( vec3( dot(L, T), dot(L, B), dot(L, N) ) );
+
+	vertexData.shadow_coord = shadow_matrix * vec4(iv3vertex, 1.0);
 
 	gl_Position = p_mat * pos_vs;
 }

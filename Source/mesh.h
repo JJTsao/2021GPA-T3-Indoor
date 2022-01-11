@@ -75,6 +75,10 @@ public:
 	GLuint vbo;
 	GLuint ebo;
 
+	GLuint fbo;
+	GLuint rbo;
+	GLuint shadow_tex;
+
 	void setupMesh() {
 		glGenVertexArrays(1, &this->vao);
 		glGenBuffers(1, &this->vbo);

@@ -8,9 +8,11 @@ Download the Framework and **Only Update the main.cpp & shader files to git**
 ### Keyboard
 W / S: Move Camera forward / backward
 
-Drag the left mouse button: Rotate Camera's viewing angle
+A / D: Move Camera left / right
 
 Z / X: Move Camera up / down
+
+Drag the left mouse button: Rotate Camera's viewing angle
 
 N: Enable / Disable normal mapping effect on trice
 

@@ -19,18 +19,6 @@ using namespace std;
 mat4 proj_matrix = mat4(1.0f);
 mat4 view_matrix = mat4(1.0f);
 
-typedef struct _MeshData
-{
-	vector<float> positions;
-	vector<float> normals;
-	vector<float> texcoords;
-	int vertexCount;
-	int material_id;
-	GLuint vao;
-	GLuint vbo;
-	GLuint tex;
-} MeshData;
-
 struct Program
 {
 	GLuint prog;
@@ -39,8 +27,7 @@ struct Program
 	GLuint v_mat;
 	GLuint p_mat;
 
-	GLuint fbo;
-	GLuint rbo;
+	// GLuint fbo;
 
 	GLuint tex_loc;
 };
@@ -61,99 +48,8 @@ Model model, trice;
 GLuint trice_normal_map;
 int normal_mapping_flag = 0;
 
-GLuint depthMap; // texture
+// GLuint depthMap;
 /********** Global Variables Bottom **********/
-
-vector<MeshData> My_LoadModel(const char* modelFile, const char* materialDir, struct Program &prog)
-{
-	tinyobj::attrib_t attrib;
-	vector<tinyobj::shape_t> shapes;
-	vector<tinyobj::material_t> materials;
-	string warn, err;
-	bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, modelFile, materialDir);
-	cout << "Load Models ! Shapes size " << shapes.size() << " Material size " << materials.size() << endl;
-	if (!warn.empty()) { std::cout << warn << endl; }
-	if (!err.empty()) { std::cout << err << endl; }
-	if (!ret) { exit(1); }
-
-	vector<MeshData> meshes;
-	for (int s = 0; s < shapes.size(); ++s) {  // for 'ladybug.obj', there is only one object
-		MeshData mesh;
-		int index_offset = 0;
-		for (int f = 0; f < shapes.at(s).mesh.num_face_vertices.size(); ++f) {
-			int fv = shapes.at(s).mesh.num_face_vertices.at(f);
-			for (int v = 0; v < fv; ++v) {
-				tinyobj::index_t idx = shapes.at(s).mesh.indices.at(index_offset + v);
-				if (idx.vertex_index != -1) {
-					mesh.positions.push_back(attrib.vertices.at(3 * idx.vertex_index + 0));
-					mesh.positions.push_back(attrib.vertices.at(3 * idx.vertex_index + 1));
-					mesh.positions.push_back(attrib.vertices.at(3 * idx.vertex_index + 2));
-				}
-				if (idx.texcoord_index != -1) {
-					mesh.texcoords.push_back(attrib.texcoords.at(2 * idx.texcoord_index + 0));
-					mesh.texcoords.push_back(attrib.texcoords.at(2 * idx.texcoord_index + 1));
-				}
-				if (idx.normal_index != -1) {
-					mesh.normals.push_back(attrib.normals.at(3 * idx.normal_index + 0));
-					mesh.normals.push_back(attrib.normals.at(3 * idx.normal_index + 1));
-					mesh.normals.push_back(attrib.normals.at(3 * idx.normal_index + 2));
-				}
-			}
-			index_offset += fv;
-		}
-		mesh.material_id = shapes.at(s).mesh.material_ids.at(0);
-		mesh.vertexCount = shapes.at(s).mesh.indices.size();
-
-		glGenVertexArrays(1, &mesh.vao);
-		glBindVertexArray(mesh.vao);
-
-		glGenBuffers(1, &mesh.vbo);
-		glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
-
-		glBufferData(GL_ARRAY_BUFFER, mesh.positions.size() * sizeof(float) + mesh.texcoords.size() * sizeof(float) + mesh.normals.size() * sizeof(float), NULL, GL_STATIC_DRAW);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, mesh.positions.size() * sizeof(float), mesh.positions.data());
-		glBufferSubData(GL_ARRAY_BUFFER, mesh.positions.size() * sizeof(float), mesh.texcoords.size() * sizeof(float), mesh.texcoords.data());
-		glBufferSubData(GL_ARRAY_BUFFER, mesh.positions.size() * sizeof(float) + mesh.texcoords.size() * sizeof(float), mesh.normals.size() * sizeof(float), mesh.normals.data());
-
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid*)(mesh.positions.size() * sizeof(float)));
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)(mesh.positions.size() * sizeof(float) + mesh.texcoords.size() * sizeof(float)));
-		glEnableVertexAttribArray(2);
-
-		cout << mesh.material_id << "\t: " << shapes.at(s).name << "\t\t: " << materials.at(mesh.material_id).diffuse_texname.c_str() << endl;
-		if ((mesh.material_id >= 4 && mesh.material_id <= 7) || mesh.material_id == 14 || mesh.material_id == 16 || mesh.material_id == 17 || mesh.material_id == 21)
-		{
-			// cout << mesh.material_id << ": " << materials.at(mesh.material_id).diffuse_texname.c_str() << endl;
-			texture_data tdata = loadImg(materials.at(mesh.material_id).diffuse_texname.c_str());
-			// cout << tdata.width << ", " << tdata.height << endl;
-
-			glGenTextures(1, &mesh.tex);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, mesh.tex);
-
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, tdata.width, tdata.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tdata.data);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-		}
-
-		meshes.push_back(mesh);
-
-		mesh.positions.clear();	mesh.positions.shrink_to_fit();
-		mesh.texcoords.clear();	mesh.texcoords.shrink_to_fit();
-		mesh.normals.clear();	mesh.normals.shrink_to_fit();
-	}
-
-	shapes.clear();		shapes.shrink_to_fit();
-	materials.clear();	materials.shrink_to_fit();
-	
-	return meshes;
-}
 
 char** loadShaderSource(const char* file)
 {
@@ -254,21 +150,41 @@ void My_Init()
 	// ----- End Initialize Shadow(Depth Shader) Program -----
 
 	// ----- Start Initialize Shadow FBO -----
-	glGenFramebuffers(1, &depthProg.fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, depthProg.fbo);
+	//glGenFramebuffers(1, &depthProg.fbo);
+	//glBindFramebuffer(GL_FRAMEBUFFER, depthProg.fbo);
 
-	glGenTextures(1, &depthMap);
-	glBindTexture(GL_TEXTURE_2D, depthMap);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+	//glGenTextures(1, &depthMap);
+	//glBindTexture(GL_TEXTURE_2D, depthMap);
+	//glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthMap, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthMap, 0);
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	for (int i = 0; i < model.meshes.size(); i++) {
+		glGenFramebuffers(1, &model.meshes.at(i).fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, model.meshes.at(i).fbo);
+
+		glGenTextures(1, &model.meshes.at(i).shadow_tex);
+		glBindTexture(GL_TEXTURE_2D, model.meshes.at(i).shadow_tex);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, model.meshes.at(i).shadow_tex, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+			cout << "FBO error" << endl;
+	}
 	// ----- End Initialize Shadow FBO -----
 
 	printGLError();
@@ -278,56 +194,74 @@ void My_Display()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	// view_matrix = lookAt(eye_pos, eye_pos + look_dir, cam_up);
 	tar_pos = vec3(cos(c*du), h, sin(c*du));
 	view_matrix = lookAt(eye_pos, eye_pos + tar_pos, cam_up);
 	mat4 scene_m_matrix = mat4(1.0f);
-	mat4 trice_m_matrix = mat4(1.0f);
+	mat4 trice_m_matrix = translate(mat4(1.0f), vec3(2.05f, 0.628725f, -1.9f));
+	trice_m_matrix = scale(trice_m_matrix, vec3(0.001f));
 
-	///***** Start Generate Shadow Map Phase *****/
-	//vec3 directional_light_pos = vec3(-2.51449f, 0.477241f, -1.21263f);
-	//const float shadow_range = 15.0f;
-	//mat4 light_proj_matrix = ortho(-shadow_range, shadow_range, -shadow_range, shadow_range, 0.0f, 100.0f);
-	//mat4 light_view_matrix = lookAt(directional_light_pos, vec3(0.0f), cam_up);
-	//mat4 scale_bias_matrix = translate(mat4(1.0f), vec3(0.5f, 0.5f, 0.5f)) * scale(mat4(1.0f), vec3(0.5f, 0.5f, 0.5f));
+	/***** Start Generate Shadow Map Phase *****/
+	vec3 directional_light_pos = vec3(-2.51449f, 0.477241f, -1.21263f);
+	const float shadow_range = 5.0f;
+	mat4 light_proj_matrix = ortho(-shadow_range, shadow_range, -shadow_range, shadow_range, 0.0f, 10.0f);
+	// mat4 light_view_matrix = lookAt(directional_light_pos, tar_pos, cam_up); 
+	// mat4 light_view_matrix = lookAt(directional_light_pos, eye_pos + tar_pos, cam_up);
+	mat4 light_view_matrix = lookAt(directional_light_pos, vec3(0.0f), cam_up);
 
-	//mat4 shadow_sbpv_matrix = scale_bias_matrix * light_proj_matrix * light_view_matrix;
-
-	//glEnable(GL_DEPTH_TEST);
+	glEnable(GL_DEPTH_TEST);
 
 	//glBindFramebuffer(GL_FRAMEBUFFER, depthProg.fbo);
-	//glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE); // g8
-	//glEnable(GL_POLYGON_OFFSET_FILL);
-	//glPolygonOffset(4.0f, 4.0f);
-	//glUseProgram(depthProg.prog);
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glClear(GL_DEPTH_BUFFER_BIT);
+	//glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+	glEnable(GL_POLYGON_OFFSET_FILL);
+	glPolygonOffset(4.0f, 4.0f);
+	glUseProgram(depthProg.prog);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	//glUniformMatrix4fv(depthProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
-	//glUniformMatrix4fv(depthProg.v_mat, 1, GL_FALSE, value_ptr(light_view_matrix));
-	//glUniformMatrix4fv(depthProg.p_mat, 1, GL_FALSE, value_ptr(light_proj_matrix));
-	//// glUniform1i(glGetUniformLocation(depthProg.prog, "obj_id"), 0);
-	//for (int i = 0; i < model.meshes.size(); i++) {
-	//	Mesh mesh = model.meshes.at(i);
-	//	glBindVertexArray(mesh.vao);
-	//	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
-	//	glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
-	//	glBindVertexArray(0);
-	//}
+	glUniformMatrix4fv(depthProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
+	glUniformMatrix4fv(depthProg.v_mat, 1, GL_FALSE, value_ptr(light_view_matrix));
+	glUniformMatrix4fv(depthProg.p_mat, 1, GL_FALSE, value_ptr(light_proj_matrix));
+	for (int i = 0; i < model.meshes.size(); i++) {
+		Mesh mesh = model.meshes.at(i);
+		glBindVertexArray(mesh.vao);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+		glBindFramebuffer(GL_FRAMEBUFFER, model.meshes.at(i).fbo); // 
+		glClear(GL_DEPTH_BUFFER_BIT);
+		glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+		glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glBindVertexArray(0);
+	}
 
-	//// trice.draw(depthProg.prog);
-	//glUseProgram(0);
-	//glDisable(GL_POLYGON_OFFSET_FILL);
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	///***** End Generate Shadow Map Phase *****/
+	glUniformMatrix4fv(depthProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
+	glUniformMatrix4fv(depthProg.v_mat, 1, GL_FALSE, value_ptr(light_view_matrix));
+	glUniformMatrix4fv(depthProg.p_mat, 1, GL_FALSE, value_ptr(light_proj_matrix));
+	trice.draw(depthProg.prog);
 
+	glUseProgram(0);
+	glDisable(GL_POLYGON_OFFSET_FILL);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	/***** End Generate Shadow Map Phase *****/
 
-	
-	/***** Start Render Scene *****/
+	/***** Start Render in Camera View *****/
+	mat4 scale_bias_matrix = translate(mat4(1.0f), vec3(0.5f, 0.5f, 0.5f));
+	scale_bias_matrix = scale(scale_bias_matrix, vec3(0.5f, 0.5f, 0.5f));
+	mat4 shadow_sbpv_matrix = scale_bias_matrix * light_proj_matrix * light_view_matrix;
+
+	glViewport(0, 0, window_width, window_height);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	/********** Start Render Scene **********/
 	glUseProgram(modelProg.prog);
+
+	/*glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+	glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);*/
 
 	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
 	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
 	glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+	glUniformMatrix4fv(glGetUniformLocation(modelProg.prog, "shadow_matrix"), 1, GL_FALSE, value_ptr(shadow_sbpv_matrix * scene_m_matrix));
 	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 0);
 	
 	for (int i = 0; i < model.meshes.size(); i++) {
@@ -347,27 +281,32 @@ void My_Display()
 			glUniform1i(glGetUniformLocation(modelProg.prog, "tex"), 0);
 		}
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, model.meshes.at(i).shadow_tex);
+		glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
+
 		glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
 
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindVertexArray(0);
 	}
 	glUseProgram(0);
-	/***** End Render Scene *****/
+	/********** End Render Scene **********/
 	
-	/***** Start Render Trice *****/
+	/********** Start Render Trice **********/
 	glUseProgram(modelProg.prog);
-	trice_m_matrix = translate(trice_m_matrix, vec3(2.05f, 0.628725f, -1.9f));
-	trice_m_matrix = scale(trice_m_matrix, vec3(0.001f));
 	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
 	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
 	glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+	glUniformMatrix4fv(glGetUniformLocation(modelProg.prog, "shadow_matrix"), 1, GL_FALSE, value_ptr(shadow_sbpv_matrix * trice_m_matrix));
+	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 1);
+	glUniform1i(glGetUniformLocation(modelProg.prog, "normal_mapping_flag"), normal_mapping_flag);
 	Mesh trice_mesh = trice.meshes.at(0);
 	glUniform3fv(glGetUniformLocation(modelProg.prog, "Ka"), 1, value_ptr(trice_mesh.mats.Kd)); // Ka = Kd for this project
 	glUniform3fv(glGetUniformLocation(modelProg.prog, "Kd"), 1, value_ptr(trice_mesh.mats.Kd));
 	glUniform3fv(glGetUniformLocation(modelProg.prog, "Ks"), 1, value_ptr(trice_mesh.mats.Ks));
-	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 1);
-	glUniform1i(glGetUniformLocation(modelProg.prog, "normal_mapping_flag"), normal_mapping_flag);
+	
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, trice_normal_map);
@@ -375,7 +314,9 @@ void My_Display()
 
 	trice.draw(modelProg.prog);
 	glUseProgram(0);
-	/***** End Render Trice *****/
+	/********** End Render Trice **********/
+
+	/***** End Render in Camera View *****/
 
 	glutSwapBuffers();
 }
@@ -416,7 +357,6 @@ void My_Mouse_Moving(int x, int y)
 	if (h > 0.5f) h = 0.5f;
 	else if(h < -1.0f) h = -1.0f;
 	oldmx = x, oldmy = y;
-	glutPostRedisplay();
 }
 
 void My_Keyboard(unsigned char key, int x, int y)
@@ -431,18 +371,16 @@ void My_Keyboard(unsigned char key, int x, int y)
 		break;
 	case 's':
 	case 'S':
-		eye_pos += 0.02f * (tar_pos);
+		eye_pos += 0.02f * (-tar_pos);
 		break;
-	//case 'a':
-	//case 'A':
-	//	rot_mat = rotate(mat4(1.0f), 0.1f, cam_up);
-	//	look_dir = vec3(rot_mat * vec4(look_dir, 1.0));
-	//	break;
-	//case 'd':
-	//case 'D':
-	//	rot_mat = rotate(mat4(1.0f), -0.1f, cam_up);
-	//	look_dir = vec3(rot_mat * vec4(look_dir, 1.0));
-	//	break;
+	case 'a':
+	case 'A':
+		eye_pos += 0.02f * cross(cam_up, tar_pos);
+		break;
+	case 'd':
+	case 'D':
+		eye_pos += 0.02f * (-cross(cam_up, tar_pos));
+		break;
 	case 'z':
 	case 'Z':
 		eye_pos += 0.1f * (cam_up);
