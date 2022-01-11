@@ -5,7 +5,7 @@
 #define MENU_TIMER_START 1
 #define MENU_TIMER_STOP 2
 #define MENU_EXIT 3
-#define SHADOW_MAP_SIZE 4096
+#define SHADOW_MAP_SIZE 1024
 #define PI 3.14159265358979323846f
 
 GLubyte timer_cnt = 0;
@@ -27,7 +27,7 @@ struct Program
 	GLuint v_mat;
 	GLuint p_mat;
 
-	// GLuint fbo;
+	GLuint fbo;
 
 	GLuint tex_loc;
 };
@@ -48,7 +48,7 @@ Model model, trice;
 GLuint trice_normal_map;
 int normal_mapping_flag = 0;
 
-// GLuint depthMap;
+GLuint depthMap;
 /********** Global Variables Bottom **********/
 
 char** loadShaderSource(const char* file)
@@ -181,10 +181,23 @@ void My_Init()
 
 		glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, model.meshes.at(i).shadow_tex, 0);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-			cout << "FBO error" << endl;
 	}
+
+	glGenFramebuffers(1, &trice.meshes.at(0).fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, trice.meshes.at(0).fbo);
+
+	glGenTextures(1, &trice.meshes.at(0).shadow_tex);
+	glBindTexture(GL_TEXTURE_2D, trice.meshes.at(0).shadow_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, trice.meshes.at(0).shadow_tex, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	// ----- End Initialize Shadow FBO -----
 
 	printGLError();
@@ -203,7 +216,7 @@ void My_Display()
 	/***** Start Generate Shadow Map Phase *****/
 	vec3 directional_light_pos = vec3(-2.51449f, 0.477241f, -1.21263f);
 	const float shadow_range = 5.0f;
-	mat4 light_proj_matrix = ortho(-shadow_range, shadow_range, -shadow_range, shadow_range, 0.0f, 10.0f);
+	mat4 light_proj_matrix = ortho(-shadow_range, shadow_range, -shadow_range, shadow_range, 0.0f, 100.0f);
 	// mat4 light_view_matrix = lookAt(directional_light_pos, tar_pos, cam_up); 
 	// mat4 light_view_matrix = lookAt(directional_light_pos, eye_pos + tar_pos, cam_up);
 	mat4 light_view_matrix = lookAt(directional_light_pos, vec3(0.0f), cam_up);
@@ -214,7 +227,7 @@ void My_Display()
 	//glClear(GL_DEPTH_BUFFER_BIT);
 	//glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
 	glEnable(GL_POLYGON_OFFSET_FILL);
-	glPolygonOffset(4.0f, 4.0f);
+	glPolygonOffset(1.0f, 1.0f);
 	glUseProgram(depthProg.prog);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -224,7 +237,6 @@ void My_Display()
 	for (int i = 0; i < model.meshes.size(); i++) {
 		Mesh mesh = model.meshes.at(i);
 		glBindVertexArray(mesh.vao);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
 		glBindFramebuffer(GL_FRAMEBUFFER, model.meshes.at(i).fbo); // 
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
@@ -236,6 +248,9 @@ void My_Display()
 	glUniformMatrix4fv(depthProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
 	glUniformMatrix4fv(depthProg.v_mat, 1, GL_FALSE, value_ptr(light_view_matrix));
 	glUniformMatrix4fv(depthProg.p_mat, 1, GL_FALSE, value_ptr(light_proj_matrix));
+	glBindFramebuffer(GL_FRAMEBUFFER, trice.meshes.at(0).fbo); // 
+	glClear(GL_DEPTH_BUFFER_BIT);
+	glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
 	trice.draw(depthProg.prog);
 
 	glUseProgram(0);
@@ -254,9 +269,9 @@ void My_Display()
 	/********** Start Render Scene **********/
 	glUseProgram(modelProg.prog);
 
-	/*glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, depthMap);
-	glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);*/
+	//glActiveTexture(GL_TEXTURE2);
+	//glBindTexture(GL_TEXTURE_2D, depthMap);
+	//glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
 
 	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
 	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
@@ -280,7 +295,6 @@ void My_Display()
 			glBindTexture(GL_TEXTURE_2D, mesh.textures.at(0).id);
 			glUniform1i(glGetUniformLocation(modelProg.prog, "tex"), 0);
 		}
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
 
 		glActiveTexture(GL_TEXTURE2);
 		glBindTexture(GL_TEXTURE_2D, model.meshes.at(i).shadow_tex);
@@ -307,6 +321,9 @@ void My_Display()
 	glUniform3fv(glGetUniformLocation(modelProg.prog, "Kd"), 1, value_ptr(trice_mesh.mats.Kd));
 	glUniform3fv(glGetUniformLocation(modelProg.prog, "Ks"), 1, value_ptr(trice_mesh.mats.Ks));
 	
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, trice.meshes.at(0).shadow_tex);
+	glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, trice_normal_map);

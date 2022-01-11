@@ -27,19 +27,18 @@ out VertexData
 
 void main()
 {
-	vec4 pos_vs = v_mat * m_mat * vec4(iv3vertex, 1.0);
+	vec4 pos_vs = m_mat * vec4(iv3vertex, 1.0);
 
-	vec3 T = normalize(mat3(v_mat * m_mat) * tangent);
-	vec3 N = normalize(mat3(v_mat * m_mat) * iv3normal);
-	vec3 B = normalize(mat3(v_mat * m_mat) * bitangent);
-	vec3 L = mat3(v_mat) * directional_light_pos - pos_vs.xyz;
-	// vec3 V = mat3(v_mat) * (-pos_vs.xyz);
+	vec3 T = normalize(mat3(m_mat) * tangent);
+	vec3 N = normalize(mat3(m_mat) * iv3normal);
+	vec3 B = normalize(mat3(m_mat) * bitangent);
+	vec3 L = directional_light_pos - pos_vs.xyz;
 	vec3 V = -pos_vs.xyz;
 	
 	vertexData.normal = iv3normal; // no use
     vertexData.texcoord = iv2tex_coord;
 
-	vertexData.N = mat3(v_mat * m_mat) * iv3normal;
+	vertexData.N = mat3(m_mat) * iv3normal;
 	vertexData.L = L;
 	vertexData.V = V;
 
@@ -48,5 +47,5 @@ void main()
 
 	vertexData.shadow_coord = shadow_matrix * vec4(iv3vertex, 1.0);
 
-	gl_Position = p_mat * pos_vs;
+	gl_Position = p_mat * v_mat * pos_vs;
 }

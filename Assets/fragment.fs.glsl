@@ -2,7 +2,7 @@
 
 uniform sampler2D tex;
 uniform sampler2D trice_normal;
-uniform sampler2DShadow shadow_tex;
+uniform sampler2D shadow_tex;
 uniform int default_tex;
 uniform int obj_id;
 uniform int normal_mapping_flag;
@@ -40,7 +40,7 @@ void main()
 
 	vec3 tex_diffuse = texture(tex, vertexData.texcoord).rgb * Id * max(dot(N, L), 0.0);
 	// float shadow_factor = max(0.2, textureProj(shadow_tex, vertexData.shadow_coord));
-	float shadow_factor = textureProj(shadow_tex, vertexData.shadow_coord);
+	// float shadow_factor = textureProj(shadow_tex, vertexData.shadow_coord);
 
 	// normal mapping (in tangent space)
 	vec3 t_V = normalize(vertexData.eyeDir);
@@ -82,7 +82,16 @@ void main()
 		}
 	}
 
-	fragColor = vec4(ambient, 1.0) + shadow_factor * vec4(diffuse + specular, 1.0);
+	// fragColor = vec4(ambient, 1.0) + shadow_factor * vec4(diffuse + specular, 1.0);
 	// fragColor = vec4(ambient, 1.0) + vec4(diffuse + specular, 1.0);
 	// fragColor = vec4(textureProj(shadow_tex, vertexData.shadow_coord));
+
+	// float bias = 0.005;
+	float bias = 0.005 * tan(acos( dot(N, L) ));
+	bias = clamp(bias, 0.0, 0.01);
+	float visibility = 1.0;
+	if ( texture( shadow_tex, vertexData.shadow_coord.xy ).z < vertexData.shadow_coord.z - bias ) {
+		visibility = 0.2;
+	}
+	fragColor = vec4(ambient, 1.0) + visibility * vec4(diffuse + specular, 1.0);
 }
