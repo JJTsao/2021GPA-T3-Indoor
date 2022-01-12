@@ -13,7 +13,7 @@ uniform vec3 Ks;
 in VertexData
 {
 	vec3 normal;
-    vec2 texcoord;
+  vec2 texcoord;
 	vec3 N;
 	vec3 L;
 	vec3 V;

@@ -16,7 +16,7 @@ vec3 directional_light_pos = vec3(-2.51449f, 0.477241f, -1.21263f);
 out VertexData
 {
 	vec3 normal;
-    vec2 texcoord;
+  vec2 texcoord;
 	vec3 N;
 	vec3 L;
 	vec3 V;
