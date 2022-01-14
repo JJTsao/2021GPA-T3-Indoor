@@ -35,7 +35,7 @@ struct Program
 	GLuint tex_loc;
 };
 
-struct Program modelProg, depthProg, nprProg;
+struct Program modelProg, depthProg, nprProg, linesProg;
 GLuint tex_array[8];
 
 int du = 90, oldmx = -1, oldmy = -1;
@@ -179,6 +179,33 @@ void My_Init()
 	nprProg.p_mat = glGetUniformLocation(nprProg.prog, "p_mat");
 	// ----- End Initialize Toon(NPR Shader) Program -----
 
+	// ----- Start Initialize Depth Shader Program -----
+	linesProg.prog = glCreateProgram();
+	GLuint lines_vs = glCreateShader(GL_VERTEX_SHADER);
+	char** linesvsSource = loadShaderSource("lines.vs.glsl");
+	glShaderSource(lines_vs, 1, linesvsSource, NULL);
+	freeShaderSource(linesvsSource);
+	glCompileShader(lines_vs);
+
+	GLuint lines_fs = glCreateShader(GL_FRAGMENT_SHADER);
+	char** linesfsSource = loadShaderSource("lines.fs.glsl");
+	glShaderSource(lines_fs, 1, linesfsSource, NULL);
+	freeShaderSource(linesfsSource);
+	glCompileShader(lines_fs);
+
+	glAttachShader(linesProg.prog, lines_vs);
+	glAttachShader(linesProg.prog, lines_fs);
+	shaderLog(lines_vs);
+	shaderLog(lines_fs);
+
+	glLinkProgram(linesProg.prog);
+	glUseProgram(linesProg.prog);
+
+	linesProg.m_mat = glGetUniformLocation(linesProg.prog, "m_mat");
+	linesProg.v_mat = glGetUniformLocation(linesProg.prog, "v_mat");
+	linesProg.p_mat = glGetUniformLocation(linesProg.prog, "p_mat");
+	// ----- End Initialize Shadow(Depth Shader) Program -----
+
 	// ----- Start Initialize Shadow FBO -----
 	//glGenFramebuffers(1, &depthProg.fbo);
 	//glBindFramebuffer(GL_FRAMEBUFFER, depthProg.fbo);
@@ -298,6 +325,30 @@ void My_Display()
 
 	/********** Start Render Scene **********/
 	if (npr_enabled) {
+		glUseProgram(linesProg.prog);
+		glEnable(GL_CULL_FACE);
+		glEnable(GL_LINE_SMOOTH);
+		glCullFace(GL_FRONT);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		glLineWidth(4);
+		glUniformMatrix4fv(linesProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
+		glUniformMatrix4fv(linesProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(linesProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		for (int i = 0; i < model.meshes.size(); i++) {
+			Mesh mesh = model.meshes.at(i);
+			glBindVertexArray(mesh.vao);
+			glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+			glBindVertexArray(0);
+		}
+		glUniformMatrix4fv(linesProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
+		glUniformMatrix4fv(linesProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(linesProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		trice.draw(linesProg.prog);
+		glDisable(GL_CULL_FACE);
+		glDisable(GL_LINE_SMOOTH);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		glUseProgram(0);
+
 		glUseProgram(nprProg.prog);
 
 		glUniformMatrix4fv(nprProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
@@ -309,6 +360,10 @@ void My_Display()
 			glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
 			glBindVertexArray(0);
 		}
+		glUniformMatrix4fv(nprProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
+		glUniformMatrix4fv(nprProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(nprProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		trice.draw(nprProg.prog);
 		glUseProgram(0);
 	}
 	else {
