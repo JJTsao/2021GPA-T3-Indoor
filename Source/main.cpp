@@ -5,11 +5,14 @@
 #define MENU_TIMER_START 1
 #define MENU_TIMER_STOP 2
 #define MENU_EXIT 3
+#define MENU_NPR_ENABLE 4
+#define MENU_NPR_DISABLE 5
 #define SHADOW_MAP_SIZE 1024
 #define PI 3.14159265358979323846f
 
 GLubyte timer_cnt = 0;
 bool timer_enabled = true;
+bool npr_enabled = false;
 unsigned int timer_speed = 16;
 
 using namespace glm;
@@ -32,7 +35,7 @@ struct Program
 	GLuint tex_loc;
 };
 
-struct Program modelProg, depthProg;
+struct Program modelProg, depthProg, nprProg, linesProg;
 GLuint tex_array[8];
 
 int du = 90, oldmx = -1, oldmy = -1;
@@ -147,6 +150,60 @@ void My_Init()
 	depthProg.m_mat = glGetUniformLocation(depthProg.prog, "m_mat");
 	depthProg.v_mat = glGetUniformLocation(depthProg.prog, "v_mat");
 	depthProg.p_mat = glGetUniformLocation(depthProg.prog, "p_mat");
+	// ----- End Initialize Shadow(Depth Shader) Program -----
+
+	// ----- Start Initialize Toon(NPR Shader) Program -----
+	nprProg.prog = glCreateProgram();
+	GLuint npr_vs = glCreateShader(GL_VERTEX_SHADER);
+	char** nprvsSource = loadShaderSource("npr.vs.glsl");
+	glShaderSource(npr_vs, 1, nprvsSource, NULL);
+	freeShaderSource(nprvsSource);
+	glCompileShader(npr_vs);
+
+	GLuint npr_fs = glCreateShader(GL_FRAGMENT_SHADER);
+	char** nprfsSource = loadShaderSource("npr.fs.glsl");
+	glShaderSource(npr_fs, 1, nprfsSource, NULL);
+	freeShaderSource(nprfsSource);
+	glCompileShader(npr_fs);
+
+	glAttachShader(nprProg.prog, npr_vs);
+	glAttachShader(nprProg.prog, npr_fs);
+	shaderLog(npr_vs);
+	shaderLog(npr_fs);
+
+	glLinkProgram(nprProg.prog);
+	glUseProgram(nprProg.prog);
+
+	nprProg.m_mat = glGetUniformLocation(nprProg.prog, "m_mat");
+	nprProg.v_mat = glGetUniformLocation(nprProg.prog, "v_mat");
+	nprProg.p_mat = glGetUniformLocation(nprProg.prog, "p_mat");
+	// ----- End Initialize Toon(NPR Shader) Program -----
+
+	// ----- Start Initialize Depth Shader Program -----
+	linesProg.prog = glCreateProgram();
+	GLuint lines_vs = glCreateShader(GL_VERTEX_SHADER);
+	char** linesvsSource = loadShaderSource("lines.vs.glsl");
+	glShaderSource(lines_vs, 1, linesvsSource, NULL);
+	freeShaderSource(linesvsSource);
+	glCompileShader(lines_vs);
+
+	GLuint lines_fs = glCreateShader(GL_FRAGMENT_SHADER);
+	char** linesfsSource = loadShaderSource("lines.fs.glsl");
+	glShaderSource(lines_fs, 1, linesfsSource, NULL);
+	freeShaderSource(linesfsSource);
+	glCompileShader(lines_fs);
+
+	glAttachShader(linesProg.prog, lines_vs);
+	glAttachShader(linesProg.prog, lines_fs);
+	shaderLog(lines_vs);
+	shaderLog(lines_fs);
+
+	glLinkProgram(linesProg.prog);
+	glUseProgram(linesProg.prog);
+
+	linesProg.m_mat = glGetUniformLocation(linesProg.prog, "m_mat");
+	linesProg.v_mat = glGetUniformLocation(linesProg.prog, "v_mat");
+	linesProg.p_mat = glGetUniformLocation(linesProg.prog, "p_mat");
 	// ----- End Initialize Shadow(Depth Shader) Program -----
 
 	// ----- Start Initialize Shadow FBO -----
@@ -267,69 +324,113 @@ void My_Display()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	/********** Start Render Scene **********/
-	glUseProgram(modelProg.prog);
-
-	//glActiveTexture(GL_TEXTURE2);
-	//glBindTexture(GL_TEXTURE_2D, depthMap);
-	//glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
-
-	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
-	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
-	glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
-	glUniformMatrix4fv(glGetUniformLocation(modelProg.prog, "shadow_matrix"), 1, GL_FALSE, value_ptr(shadow_sbpv_matrix * scene_m_matrix));
-	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 0);
-	
-	for (int i = 0; i < model.meshes.size(); i++) {
-		Mesh mesh = model.meshes.at(i);
-		glBindVertexArray(mesh.vao);
-		glUniform3fv(glGetUniformLocation(modelProg.prog, "Ka"), 1, value_ptr(mesh.mats.Ka));
-		glUniform3fv(glGetUniformLocation(modelProg.prog, "Kd"), 1, value_ptr(mesh.mats.Kd));
-		glUniform3fv(glGetUniformLocation(modelProg.prog, "Ks"), 1, value_ptr(mesh.mats.Ks));
-
-		if (mesh.textures.size() == 0) {
-			glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 1);
+	if (npr_enabled) {
+		glUseProgram(linesProg.prog);
+		glEnable(GL_CULL_FACE);
+		glEnable(GL_LINE_SMOOTH);
+		glCullFace(GL_FRONT);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		glLineWidth(4);
+		glUniformMatrix4fv(linesProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
+		glUniformMatrix4fv(linesProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(linesProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		for (int i = 0; i < model.meshes.size(); i++) {
+			Mesh mesh = model.meshes.at(i);
+			glBindVertexArray(mesh.vao);
+			glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+			glBindVertexArray(0);
 		}
-		else {
-			glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 0);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, mesh.textures.at(0).id);
-			glUniform1i(glGetUniformLocation(modelProg.prog, "tex"), 0);
+		glUniformMatrix4fv(linesProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
+		glUniformMatrix4fv(linesProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(linesProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		trice.draw(linesProg.prog);
+		glDisable(GL_CULL_FACE);
+		glDisable(GL_LINE_SMOOTH);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		glUseProgram(0);
+
+		glUseProgram(nprProg.prog);
+
+		glUniformMatrix4fv(nprProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
+		glUniformMatrix4fv(nprProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(nprProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		for (int i = 0; i < model.meshes.size(); i++) {
+			Mesh mesh = model.meshes.at(i);
+			glBindVertexArray(mesh.vao);
+			glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+			glBindVertexArray(0);
 		}
+		glUniformMatrix4fv(nprProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
+		glUniformMatrix4fv(nprProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(nprProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		trice.draw(nprProg.prog);
+		glUseProgram(0);
+	}
+	else {
+		glUseProgram(modelProg.prog);
+
+		//glActiveTexture(GL_TEXTURE2);
+		//glBindTexture(GL_TEXTURE_2D, depthMap);
+		//glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
+
+		glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
+		glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		glUniformMatrix4fv(glGetUniformLocation(modelProg.prog, "shadow_matrix"), 1, GL_FALSE, value_ptr(shadow_sbpv_matrix * scene_m_matrix));
+		glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 0);
+
+		for (int i = 0; i < model.meshes.size(); i++) {
+			Mesh mesh = model.meshes.at(i);
+			glBindVertexArray(mesh.vao);
+			glUniform3fv(glGetUniformLocation(modelProg.prog, "Ka"), 1, value_ptr(mesh.mats.Ka));
+			glUniform3fv(glGetUniformLocation(modelProg.prog, "Kd"), 1, value_ptr(mesh.mats.Kd));
+			glUniform3fv(glGetUniformLocation(modelProg.prog, "Ks"), 1, value_ptr(mesh.mats.Ks));
+
+			if (mesh.textures.size() == 0) {
+				glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 1);
+			}
+			else {
+				glUniform1i(glGetUniformLocation(modelProg.prog, "default_tex"), 0);
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, mesh.textures.at(0).id);
+				glUniform1i(glGetUniformLocation(modelProg.prog, "tex"), 0);
+			}
+
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_2D, model.meshes.at(i).shadow_tex);
+			glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
+
+			glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glBindVertexArray(0);
+		}
+		glUseProgram(0);
+		/********** End Render Scene **********/
+
+		/********** Start Render Trice **********/
+		glUseProgram(modelProg.prog);
+		glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
+		glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		glUniformMatrix4fv(glGetUniformLocation(modelProg.prog, "shadow_matrix"), 1, GL_FALSE, value_ptr(shadow_sbpv_matrix * trice_m_matrix));
+		glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 1);
+		glUniform1i(glGetUniformLocation(modelProg.prog, "normal_mapping_flag"), normal_mapping_flag);
+		Mesh trice_mesh = trice.meshes.at(0);
+		glUniform3fv(glGetUniformLocation(modelProg.prog, "Ka"), 1, value_ptr(trice_mesh.mats.Kd)); // Ka = Kd for this project
+		glUniform3fv(glGetUniformLocation(modelProg.prog, "Kd"), 1, value_ptr(trice_mesh.mats.Kd));
+		glUniform3fv(glGetUniformLocation(modelProg.prog, "Ks"), 1, value_ptr(trice_mesh.mats.Ks));
 
 		glActiveTexture(GL_TEXTURE2);
-		glBindTexture(GL_TEXTURE_2D, model.meshes.at(i).shadow_tex);
+		glBindTexture(GL_TEXTURE_2D, trice.meshes.at(0).shadow_tex);
 		glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
 
-		glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, trice_normal_map);
+		glUniform1i(glGetUniformLocation(modelProg.prog, "trice_normal"), 1);
 
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindVertexArray(0);
+		trice.draw(modelProg.prog);
 	}
-	glUseProgram(0);
-	/********** End Render Scene **********/
-	
-	/********** Start Render Trice **********/
-	glUseProgram(modelProg.prog);
-	glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
-	glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
-	glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
-	glUniformMatrix4fv(glGetUniformLocation(modelProg.prog, "shadow_matrix"), 1, GL_FALSE, value_ptr(shadow_sbpv_matrix * trice_m_matrix));
-	glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 1);
-	glUniform1i(glGetUniformLocation(modelProg.prog, "normal_mapping_flag"), normal_mapping_flag);
-	Mesh trice_mesh = trice.meshes.at(0);
-	glUniform3fv(glGetUniformLocation(modelProg.prog, "Ka"), 1, value_ptr(trice_mesh.mats.Kd)); // Ka = Kd for this project
-	glUniform3fv(glGetUniformLocation(modelProg.prog, "Kd"), 1, value_ptr(trice_mesh.mats.Kd));
-	glUniform3fv(glGetUniformLocation(modelProg.prog, "Ks"), 1, value_ptr(trice_mesh.mats.Ks));
-	
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, trice.meshes.at(0).shadow_tex);
-	glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, trice_normal_map);
-	glUniform1i(glGetUniformLocation(modelProg.prog, "trice_normal"), 1);
-
-	trice.draw(modelProg.prog);
 	glUseProgram(0);
 	/********** End Render Trice **********/
 
@@ -449,6 +550,12 @@ void My_Menu(int id)
 	case MENU_EXIT:
 		exit(0);
 		break;
+	case MENU_NPR_ENABLE:
+		npr_enabled = true;
+		break;
+	case MENU_NPR_DISABLE:
+		npr_enabled = false;
+		break;
 	default:
 		break;
 	}
@@ -481,14 +588,20 @@ int main(int argc, char *argv[])
 	// Create a menu and bind it to mouse right button.
 	int menu_main = glutCreateMenu(My_Menu);
 	int menu_timer = glutCreateMenu(My_Menu);
+	int menu_npr = glutCreateMenu(My_Menu);
 
 	glutSetMenu(menu_main);
 	glutAddSubMenu("Timer", menu_timer);
+	glutAddSubMenu("NPR", menu_npr);
 	glutAddMenuEntry("Exit", MENU_EXIT);
 
 	glutSetMenu(menu_timer);
 	glutAddMenuEntry("Start", MENU_TIMER_START);
 	glutAddMenuEntry("Stop", MENU_TIMER_STOP);
+
+	glutSetMenu(menu_npr);
+	glutAddMenuEntry("Enable", MENU_NPR_ENABLE);
+	glutAddMenuEntry("Disable", MENU_NPR_DISABLE);
 
 	glutSetMenu(menu_main);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
