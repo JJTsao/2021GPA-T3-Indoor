@@ -7,12 +7,11 @@
 #define MENU_EXIT 3
 #define MENU_NPR_ENABLE 4
 #define MENU_NPR_DISABLE 5
-#define SHADOW_MAP_SIZE 1024
+#define SHADOW_MAP_SIZE 2048
 #define PI 3.14159265358979323846f
 
 GLubyte timer_cnt = 0;
 bool timer_enabled = true;
-bool npr_enabled = false;
 unsigned int timer_speed = 16;
 
 using namespace glm;
@@ -31,11 +30,12 @@ struct Program
 	GLuint p_mat;
 
 	GLuint fbo;
+	GLuint rbo;
 
 	GLuint tex_loc;
 };
 
-struct Program modelProg, depthProg, nprProg, linesProg;
+struct Program modelProg, depthProg, nprProg, linesProg, finalProg;
 GLuint tex_array[8];
 
 int du = 90, oldmx = -1, oldmy = -1;
@@ -47,11 +47,20 @@ vec3 cam_up = vec3(0.0f, 1.0f, 0.0f);
 int window_width;
 int window_height;
 
-Model model, trice;
+Model model, trice, point_light;
 GLuint trice_normal_map;
-int normal_mapping_flag = 0;
+bool normal_mapping_enabled = false;
+bool npr_enabled = false;
 
-GLuint depthMap;
+GLuint depthMap, originView, brightView;
+GLuint final_vao, final_vbo;
+static const GLfloat fb_positions[] =
+{
+	1.0f, -1.0f, 1.0f, 0.0f,
+	-1.0f, -1.0f, 0.0f, 0.0f,
+	-1.0f, 1.0f, 0.0f, 1.0f,
+	1.0f, 1.0f, 1.0f, 1.0f
+};
 /********** Global Variables Bottom **********/
 
 char** loadShaderSource(const char* file)
@@ -108,6 +117,7 @@ void My_Init()
 
 	model.loadModel("../Assets/indoor_models_release/Grey_White_Room.obj");
 	trice.loadModel("../Assets/indoor_models_release/trice.obj");
+	point_light.loadModel("../Assets/indoor_models_release/Sphere.obj");
 
 	texture_data tdata = loadImg("./indoor_models_release/tricnorm.jpg");
 
@@ -152,6 +162,47 @@ void My_Init()
 	depthProg.p_mat = glGetUniformLocation(depthProg.prog, "p_mat");
 	// ----- End Initialize Shadow(Depth Shader) Program -----
 
+	// ----- Start Initialize Final Program -----
+	finalProg.prog = glCreateProgram();
+	GLuint final_vs = glCreateShader(GL_VERTEX_SHADER);
+	char** finalvsSource = loadShaderSource("final.vs.glsl");
+	glShaderSource(final_vs, 1, finalvsSource, NULL);
+	freeShaderSource(finalvsSource);
+	glCompileShader(final_vs);
+
+	GLuint final_fs = glCreateShader(GL_FRAGMENT_SHADER);
+	char** finalfsSource = loadShaderSource("final.fs.glsl");
+	glShaderSource(final_fs, 1, finalfsSource, NULL);
+	freeShaderSource(finalfsSource);
+	glCompileShader(final_fs);
+
+	glAttachShader(finalProg.prog, final_vs);
+	glAttachShader(finalProg.prog, final_fs);
+	shaderLog(final_vs);
+	shaderLog(final_fs);
+
+	glLinkProgram(finalProg.prog);
+	glUseProgram(finalProg.prog);
+
+	//finalProg.m_mat = glGetUniformLocation(finalProg.prog, "m_mat");
+	//finalProg.v_mat = glGetUniformLocation(finalProg.prog, "v_mat");
+	//finalProg.p_mat = glGetUniformLocation(finalProg.prog, "p_mat");
+
+	glGenVertexArrays(1, &final_vao);
+	glBindVertexArray(final_vao);
+
+	glGenBuffers(1, &final_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, final_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(fb_positions), fb_positions, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 4, 0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 4, (const GLvoid*)(sizeof(GL_FLOAT) * 2));
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+
+	glBindVertexArray(0);
+	// ----- End Initialize Final Program -----
+
 	// ----- Start Initialize Toon(NPR Shader) Program -----
 	nprProg.prog = glCreateProgram();
 	GLuint npr_vs = glCreateShader(GL_VERTEX_SHADER);
@@ -179,7 +230,7 @@ void My_Init()
 	nprProg.p_mat = glGetUniformLocation(nprProg.prog, "p_mat");
 	// ----- End Initialize Toon(NPR Shader) Program -----
 
-	// ----- Start Initialize Depth Shader Program -----
+	// ----- Start Initialize Lines Shader Program -----
 	linesProg.prog = glCreateProgram();
 	GLuint lines_vs = glCreateShader(GL_VERTEX_SHADER);
 	char** linesvsSource = loadShaderSource("lines.vs.glsl");
@@ -204,7 +255,7 @@ void My_Init()
 	linesProg.m_mat = glGetUniformLocation(linesProg.prog, "m_mat");
 	linesProg.v_mat = glGetUniformLocation(linesProg.prog, "v_mat");
 	linesProg.p_mat = glGetUniformLocation(linesProg.prog, "p_mat");
-	// ----- End Initialize Shadow(Depth Shader) Program -----
+	// ----- End Initialize Lines Shader Program -----
 
 	// ----- Start Initialize Shadow FBO -----
 	//glGenFramebuffers(1, &depthProg.fbo);
@@ -264,19 +315,22 @@ void My_Display()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	/***** Start Initialize mvp matrices *****/
 	tar_pos = vec3(cos(c*du), h, sin(c*du));
 	view_matrix = lookAt(eye_pos, eye_pos + tar_pos, cam_up);
 	mat4 scene_m_matrix = mat4(1.0f);
 	mat4 trice_m_matrix = translate(mat4(1.0f), vec3(2.05f, 0.628725f, -1.9f));
 	trice_m_matrix = scale(trice_m_matrix, vec3(0.001f));
+	mat4 point_light_m_matrix = translate(mat4(1.0f), vec3(1.87659f, 0.4625f, 0.103928f));
+	point_light_m_matrix = scale(point_light_m_matrix, vec3(0.15f));
+	/***** End Initialize mvp matrices *****/
 
 	/***** Start Generate Shadow Map Phase *****/
 	vec3 directional_light_pos = vec3(-2.51449f, 0.477241f, -1.21263f);
 	const float shadow_range = 5.0f;
-	mat4 light_proj_matrix = ortho(-shadow_range, shadow_range, -shadow_range, shadow_range, 0.0f, 100.0f);
-	// mat4 light_view_matrix = lookAt(directional_light_pos, tar_pos, cam_up); 
-	// mat4 light_view_matrix = lookAt(directional_light_pos, eye_pos + tar_pos, cam_up);
+	mat4 light_proj_matrix = ortho(-shadow_range, shadow_range, -shadow_range, shadow_range, 0.0f, 10.0f);
 	mat4 light_view_matrix = lookAt(directional_light_pos, vec3(0.0f), cam_up);
+	// mat4 light_view_matrix = lookAt(directional_light_pos, vec3(0.0f), cam_up);
 
 	glEnable(GL_DEPTH_TEST);
 
@@ -294,18 +348,33 @@ void My_Display()
 	for (int i = 0; i < model.meshes.size(); i++) {
 		Mesh mesh = model.meshes.at(i);
 		glBindVertexArray(mesh.vao);
+
+		if (mesh.textures.size() == 0) {
+			glUniform1i(glGetUniformLocation(depthProg.prog, "default_tex"), 1);
+		}
+		else {
+			glUniform1i(glGetUniformLocation(depthProg.prog, "default_tex"), 0);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, mesh.textures.at(0).id);
+			glUniform1i(glGetUniformLocation(depthProg.prog, "diffuse_tex"), 0);
+		}
+
 		glBindFramebuffer(GL_FRAMEBUFFER, model.meshes.at(i).fbo); // 
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+
 		glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindVertexArray(0);
 	}
 
 	glUniformMatrix4fv(depthProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
 	glUniformMatrix4fv(depthProg.v_mat, 1, GL_FALSE, value_ptr(light_view_matrix));
 	glUniformMatrix4fv(depthProg.p_mat, 1, GL_FALSE, value_ptr(light_proj_matrix));
-	glBindFramebuffer(GL_FRAMEBUFFER, trice.meshes.at(0).fbo); // 
+	glBindFramebuffer(GL_FRAMEBUFFER, trice.meshes.at(0).fbo);
 	glClear(GL_DEPTH_BUFFER_BIT);
 	glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
 	trice.draw(depthProg.prog);
@@ -314,6 +383,10 @@ void My_Display()
 	glDisable(GL_POLYGON_OFFSET_FILL);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	/***** End Generate Shadow Map Phase *****/
+
+	glBindFramebuffer(GL_FRAMEBUFFER, modelProg.fbo); // Offline Rendering
+	static const GLenum draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glDrawBuffers(2, draw_buffers);
 
 	/***** Start Render in Camera View *****/
 	mat4 scale_bias_matrix = translate(mat4(1.0f), vec3(0.5f, 0.5f, 0.5f));
@@ -415,7 +488,7 @@ void My_Display()
 		glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
 		glUniformMatrix4fv(glGetUniformLocation(modelProg.prog, "shadow_matrix"), 1, GL_FALSE, value_ptr(shadow_sbpv_matrix * trice_m_matrix));
 		glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 1);
-		glUniform1i(glGetUniformLocation(modelProg.prog, "normal_mapping_flag"), normal_mapping_flag);
+		glUniform1i(glGetUniformLocation(modelProg.prog, "normal_mapping_flag"), normal_mapping_enabled);
 		Mesh trice_mesh = trice.meshes.at(0);
 		glUniform3fv(glGetUniformLocation(modelProg.prog, "Ka"), 1, value_ptr(trice_mesh.mats.Kd)); // Ka = Kd for this project
 		glUniform3fv(glGetUniformLocation(modelProg.prog, "Kd"), 1, value_ptr(trice_mesh.mats.Kd));
@@ -430,11 +503,47 @@ void My_Display()
 		glUniform1i(glGetUniformLocation(modelProg.prog, "trice_normal"), 1);
 
 		trice.draw(modelProg.prog);
-	}
-	glUseProgram(0);
-	/********** End Render Trice **********/
+		glUseProgram(0);
+		/********** End Render Trice **********/
 
+		/********** Start Render Point Light Sphere **********/
+		glUseProgram(modelProg.prog);
+		glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(point_light_m_matrix));
+		glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
+		glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+		glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 2);
+
+		point_light.draw(modelProg.prog);
+		glUseProgram(0);
+		/********** End Render Point Light Sphere **********/
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	/***** End Render in Camera View *****/
+
+	/***** Start Render in Screen View *****/
+	glViewport(0, 0, window_width, window_height);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(finalProg.prog);
+	glBindVertexArray(final_vao);
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, originView);
+	glUniform1i(glGetUniformLocation(finalProg.prog, "originView"), 3);
+
+	glActiveTexture(GL_TEXTURE4);
+	glBindTexture(GL_TEXTURE_2D, brightView);
+	glUniform1i(glGetUniformLocation(finalProg.prog, "brightView"), 4);
+
+	glUniform1i(glGetUniformLocation(finalProg.prog, "window_width"), window_width);
+	glUniform1i(glGetUniformLocation(finalProg.prog, "window_height"), window_height);
+
+	glDisable(GL_DEPTH_TEST);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+	glBindVertexArray(0);
+	glUseProgram(0);
+	/***** End Render in Screen View *****/
 
 	glutSwapBuffers();
 }
@@ -447,6 +556,44 @@ void My_Reshape(int width, int height)
 	float viewportAspect = (float)width / (float)height;
 	float fov = 80.0f;
 	proj_matrix = perspective(radians(fov), viewportAspect, 0.1f, 1000.0f);
+
+	// ----- Start Model Shader FBO & RBO -----
+	glDeleteRenderbuffers(1, &modelProg.rbo);
+	glDeleteTextures(1, &originView);
+	glDeleteTextures(1, &brightView);
+
+	glGenRenderbuffers(1, &modelProg.rbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, modelProg.rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, window_width, window_height);
+
+	glGenFramebuffers(1, &modelProg.fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, modelProg.fbo);
+
+	glGenTextures(1, &originView);
+	glBindTexture(GL_TEXTURE_2D, originView);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, window_width, window_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, originView, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glGenTextures(1, &brightView);
+	glBindTexture(GL_TEXTURE_2D, brightView);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, window_width, window_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, brightView, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, modelProg.rbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	// ----- End Model Shader FBO & RBO -----
 }
 
 void My_Timer(int val)
@@ -509,7 +656,19 @@ void My_Keyboard(unsigned char key, int x, int y)
 		break;
 	case 'n':
 	case 'N':
-		normal_mapping_flag = !normal_mapping_flag;
+		normal_mapping_enabled = !normal_mapping_enabled;
+		break;
+	case 'e':
+	case 'E':
+		cout << "New eye_pos: " << endl;
+		int x1, y1, z1; cin >> x1 >> y1 >> z1;
+		eye_pos = vec3(x1, y1, z1);
+		break;
+	case 'l':
+	case 'L':
+		cout << "New look-At: " << endl;
+		int x2, y2, z2; cin >> x2 >> y2 >> z2;
+		eye_pos = vec3(x2, y2, z2);
 		break;
 	}
 }

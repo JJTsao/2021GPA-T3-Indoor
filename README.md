@@ -16,4 +16,8 @@ Drag the left mouse button: Rotate Camera's viewing angle
 
 N: Enable / Disable normal mapping effect on trice
 
+Click the right mouse button to choose the advanced rendering effect:
+
++ NPR
+
 Feel free to ask me if you have any question :) 

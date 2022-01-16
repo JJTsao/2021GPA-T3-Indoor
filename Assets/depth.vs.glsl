@@ -5,8 +5,12 @@ uniform mat4 v_mat;
 uniform mat4 p_mat;
 
 layout (location = 0) in vec3 position;
+layout (location = 1) in vec2 iv2tex_coord;
+
+out vec2 tex_coord;
 
 void main()
 {
+	tex_coord = iv2tex_coord;
 	gl_Position = p_mat * v_mat * m_mat * vec4(position, 1.0);
 }

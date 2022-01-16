@@ -12,17 +12,21 @@ uniform mat4 p_mat;
 uniform mat4 shadow_matrix;
 
 vec3 directional_light_pos = vec3(-2.51449f, 0.477241f, -1.21263f);
+vec3 point_light_pos = vec3(1.87659f, 0.4625f, 0.103928f);
+
+out vec3 eyeDir;
+out vec3 t_eyeDir;
+
+out vec3 dirLightDir;
+out vec3 t_dirLightDir;
+out vec3 pointLightDir;
+out vec3 t_pointLightDir;
+out vec4 shadow_coord;
 
 out VertexData
 {
+	vec2 texcoord;
 	vec3 normal;
-  vec2 texcoord;
-	vec3 N;
-	vec3 L;
-	vec3 V;
-	vec3 eyeDir;
-	vec3 lightDir;
-	vec4 shadow_coord;
 } vertexData;
 
 void main()
@@ -32,20 +36,18 @@ void main()
 	vec3 T = normalize(mat3(m_mat) * tangent);
 	vec3 N = normalize(mat3(m_mat) * iv3normal);
 	vec3 B = normalize(mat3(m_mat) * bitangent);
-	vec3 L = directional_light_pos - pos_vs.xyz;
-	vec3 V = -pos_vs.xyz;
-	
-	vertexData.normal = iv3normal; // no use
-    vertexData.texcoord = iv2tex_coord;
 
-	vertexData.N = mat3(m_mat) * iv3normal;
-	vertexData.L = L;
-	vertexData.V = V;
+	eyeDir = -pos_vs.xyz;
+	t_eyeDir = normalize( vec3( dot(eyeDir, T), dot(eyeDir, B), dot(eyeDir, N) ) );
 
-	vertexData.eyeDir = normalize( vec3( dot(V, T), dot(V, B), dot(V, N) ) );
-	vertexData.lightDir = normalize( vec3( dot(L, T), dot(L, B), dot(L, N) ) );
+	dirLightDir = directional_light_pos - pos_vs.xyz;
+	t_dirLightDir = normalize( vec3( dot(dirLightDir, T), dot(dirLightDir, B), dot(dirLightDir, N) ) );
+	pointLightDir = point_light_pos - pos_vs.xyz;
+	t_pointLightDir = normalize( vec3( dot(pointLightDir, T), dot(pointLightDir, B), dot(pointLightDir, N) ) );
+	shadow_coord = shadow_matrix * vec4(iv3vertex, 1.0);
 
-	vertexData.shadow_coord = shadow_matrix * vec4(iv3vertex, 1.0);
+	vertexData.texcoord = iv2tex_coord;
+	vertexData.normal = N;
 
 	gl_Position = p_mat * v_mat * pos_vs;
 }
