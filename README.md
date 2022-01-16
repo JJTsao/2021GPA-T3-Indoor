@@ -16,8 +16,16 @@ Drag the left mouse button: Rotate Camera's viewing angle
 
 N: Enable / Disable normal mapping effect on trice
 
-Click the right mouse button to choose the advanced rendering effect:
+E: Enter the new eye position in command line
+
+L: Enter the new look-at center in command line
+
+G: Display the G-buffer maps in turn (while G-buffer rendering enabled)
+
+Click the right mouse button to choose rendering effect:
 
 + NPR
+
++ G-buffer
 
 Feel free to ask me if you have any question :) 

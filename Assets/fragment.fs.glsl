@@ -32,7 +32,7 @@ float specular_power = 225.0;
 vec3 Ia = vec3(0.2);
 vec3 Id = vec3(0.7);
 vec3 Is = vec3(0.1);
-vec3 bloom_Id = vec3(1.5);
+vec3 bloom_Id = vec3(1.0);
 
 vec4 CalcDirLight(vec3 lightDir, vec3 normal, vec3 viewDir, float shadowFactor, vec3 Kd)
 {
@@ -71,8 +71,8 @@ void main()
 		float attenuation = min( 10.0 / (1 + 2 * d + 2 * pow(d, 2)), 1);
 		vec3 N = normalize(texture(trice_normal, vertexData.texcoord).rgb * 2.0 - vec3(1.0));
 		vec3 V = normalize(t_eyeDir);
-		fragColor += 0.5 * CalcDirLight(dir_L, N, V, visibility, Kd);
-		fragColor += 0.5 * CalcPointLight(point_L, N, V, attenuation, Kd);
+		fragColor += CalcDirLight(dir_L, N, V, visibility, Kd);
+		fragColor += CalcPointLight(point_L, N, V, attenuation, Kd);
 	} else if(obj_id == 0 && default_tex == 0) {
 		if(texture(tex, vertexData.texcoord).a < 0.1) discard; // transparent pixels
 
@@ -83,8 +83,8 @@ void main()
 		vec3 N = normalize(texture(trice_normal, vertexData.texcoord).rgb * 2.0 - vec3(1.0));
 		vec3 V = normalize(eyeDir);
 		vec3 diffuse_Kd = texture(tex, vertexData.texcoord).rgb;
-		fragColor += 0.5 * CalcDirLight(dir_L, N, V, visibility, diffuse_Kd);
-		fragColor += 0.5 * CalcPointLight(point_L, N, V, attenuation, diffuse_Kd);
+		fragColor += CalcDirLight(dir_L, N, V, visibility, diffuse_Kd);
+		fragColor += CalcPointLight(point_L, N, V, attenuation, diffuse_Kd);
 	} else if(obj_id == 2) { // Point Light Sphere
 		vec4 bloomColor = vec4(1.0, 1.0, 0.8, 1.0);
 		float brightness = (bloomColor.r + bloomColor.g + bloomColor.b) / 3.0f;
@@ -96,7 +96,7 @@ void main()
 		float attenuation = min( 10.0 / (1 + 2 * d + 2 * pow(d, 2)), 1);
 		vec3 N = normalize(vertexData.normal);
 		vec3 V = normalize(eyeDir);
-		fragColor += 0.5 * CalcDirLight(dir_L, N, V, visibility, Kd);
-		fragColor += 0.5 * CalcPointLight(point_L, N, V, attenuation, Kd);
+		fragColor += CalcDirLight(dir_L, N, V, visibility, Kd);
+		fragColor += CalcPointLight(point_L, N, V, attenuation, Kd);
 	}
 }
