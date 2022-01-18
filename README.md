@@ -22,6 +22,8 @@ L: Enter the new look-at center in command line
 
 G: Display the G-buffer maps in turn (while G-buffer rendering enabled)
 
+P: Enable / Disable the point light
+
 Click the right mouse button to choose rendering effect:
 
 + NPR

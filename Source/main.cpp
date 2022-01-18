@@ -9,7 +9,7 @@
 #define MENU_NPR_DISABLE 5
 #define MENU_DEFER_ENABLE 6
 #define MENU_DEFER_DISABLE 7
-#define SHADOW_MAP_SIZE 2048
+#define SHADOW_MAP_SIZE 8192
 #define PI 3.14159265358979323846f
 
 GLubyte timer_cnt = 0;
@@ -54,6 +54,7 @@ GLuint trice_normal_map;
 bool normal_mapping_enabled = false;
 bool npr_enabled = false;
 bool deferred_enabled = false;
+bool point_light_enabled = false;
 
 GLuint depthMap, originView, brightView;
 GLuint final_vao, final_vbo;
@@ -139,6 +140,13 @@ void setupBloomFBO()
 
 void setupGeometryBuffer()
 {
+	glDeleteRenderbuffers(1, &gbuffer.rbo);
+	glDeleteTextures(5, &gbuffer.position_map);
+
+	glGenRenderbuffers(1, &gbuffer.rbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, gbuffer.rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, window_width, window_height);
+
 	glBindFramebuffer(GL_FRAMEBUFFER, gbuffer.fbo);
 
 	glGenTextures(5, &gbuffer.position_map); // op
@@ -174,6 +182,25 @@ void setupGeometryBuffer()
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT4, gbuffer.specular_map, 0);
 
 	glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gbuffer.rbo);
+}
+
+void setupDepthMap()
+{
+	glGenFramebuffers(1, &depthProg.fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, depthProg.fbo);
+
+	glGenTextures(1, &depthMap);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthMap, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void My_Init()
@@ -373,7 +400,7 @@ void My_Init()
 	linesProg.p_mat = glGetUniformLocation(linesProg.prog, "p_mat");
 	// ----- End Initialize Lines Shader Program -----
 
-	// ----- Start Initialize Shadow FBO -----
+	//// ----- Start Initialize Shadow FBO -----
 	//glGenFramebuffers(1, &depthProg.fbo);
 	//glBindFramebuffer(GL_FRAMEBUFFER, depthProg.fbo);
 
@@ -389,39 +416,39 @@ void My_Init()
 
 	//glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthMap, 0);
 	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	for (int i = 0; i < model.meshes.size(); i++) {
-		glGenFramebuffers(1, &model.meshes.at(i).fbo);
-		glBindFramebuffer(GL_FRAMEBUFFER, model.meshes.at(i).fbo);
+	//for (int i = 0; i < model.meshes.size(); i++) {
+	//	glGenFramebuffers(1, &model.meshes.at(i).fbo);
+	//	glBindFramebuffer(GL_FRAMEBUFFER, model.meshes.at(i).fbo);
 
-		glGenTextures(1, &model.meshes.at(i).shadow_tex);
-		glBindTexture(GL_TEXTURE_2D, model.meshes.at(i).shadow_tex);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+	//	glGenTextures(1, &model.meshes.at(i).shadow_tex);
+	//	glBindTexture(GL_TEXTURE_2D, model.meshes.at(i).shadow_tex);
+	//	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 
-		glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, model.meshes.at(i).shadow_tex, 0);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	}
+	//	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, model.meshes.at(i).shadow_tex, 0);
+	//	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//}
 
-	glGenFramebuffers(1, &trice.meshes.at(0).fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, trice.meshes.at(0).fbo);
+	//glGenFramebuffers(1, &trice.meshes.at(0).fbo);
+	//glBindFramebuffer(GL_FRAMEBUFFER, trice.meshes.at(0).fbo);
 
-	glGenTextures(1, &trice.meshes.at(0).shadow_tex);
-	glBindTexture(GL_TEXTURE_2D, trice.meshes.at(0).shadow_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+	//glGenTextures(1, &trice.meshes.at(0).shadow_tex);
+	//glBindTexture(GL_TEXTURE_2D, trice.meshes.at(0).shadow_tex);
+	//glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, trice.meshes.at(0).shadow_tex, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	//glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, trice.meshes.at(0).shadow_tex, 0);
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	// ----- End Initialize Shadow FBO -----
 
 	// cout << GL_MAX_TEXTURE_UNITS << endl;
@@ -443,15 +470,16 @@ void My_Display()
 
 	/***** 1. Start Generate Shadow Map Phase *****/
 	vec3 directional_light_pos = vec3(-2.51449f, 0.477241f, -1.21263f);
-	const float shadow_range = 5.0f;
+	const float shadow_range = 10.0f;
 	mat4 light_proj_matrix = ortho(-shadow_range, shadow_range, -shadow_range, shadow_range, 0.0f, 10.0f);
 	mat4 light_view_matrix = lookAt(directional_light_pos, vec3(0.0f), cam_up);
 
 	glEnable(GL_DEPTH_TEST);
 
-	//glBindFramebuffer(GL_FRAMEBUFFER, depthProg.fbo);
-	//glClear(GL_DEPTH_BUFFER_BIT);
-	//glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+	glBindFramebuffer(GL_FRAMEBUFFER, depthProg.fbo);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) cout << "FBO Error!" << endl;
+	glClear(GL_DEPTH_BUFFER_BIT);
+	glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
 	glEnable(GL_POLYGON_OFFSET_FILL);
 	glPolygonOffset(1.0f, 1.0f);
 	glUseProgram(depthProg.prog);
@@ -473,14 +501,7 @@ void My_Display()
 			glBindTexture(GL_TEXTURE_2D, mesh.textures.at(0).id);
 			glUniform1i(glGetUniformLocation(depthProg.prog, "diffuse_tex"), 0);
 		}
-
-		glBindFramebuffer(GL_FRAMEBUFFER, model.meshes.at(i).fbo); // 
-		glClear(GL_DEPTH_BUFFER_BIT);
-		glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-
 		glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindVertexArray(0);
@@ -489,9 +510,6 @@ void My_Display()
 	glUniformMatrix4fv(depthProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
 	glUniformMatrix4fv(depthProg.v_mat, 1, GL_FALSE, value_ptr(light_view_matrix));
 	glUniformMatrix4fv(depthProg.p_mat, 1, GL_FALSE, value_ptr(light_proj_matrix));
-	glBindFramebuffer(GL_FRAMEBUFFER, trice.meshes.at(0).fbo);
-	glClear(GL_DEPTH_BUFFER_BIT);
-	glViewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
 	trice.draw(depthProg.prog);
 
 	glUseProgram(0);
@@ -500,10 +518,6 @@ void My_Display()
 	/***** End Generate Shadow Map Phase *****/
 
 	if(deferred_enabled == false) {
-		glBindFramebuffer(GL_FRAMEBUFFER, modelProg.fbo); // Offline Rendering
-		static const GLenum draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-		glDrawBuffers(2, draw_buffers);
-
 		/***** 2. Start Render in Camera View *****/
 		mat4 scale_bias_matrix = translate(mat4(1.0f), vec3(0.5f, 0.5f, 0.5f));
 		scale_bias_matrix = scale(scale_bias_matrix, vec3(0.5f, 0.5f, 0.5f));
@@ -556,12 +570,19 @@ void My_Display()
 			glUseProgram(0);
 		}
 		else {
+			glBindFramebuffer(GL_FRAMEBUFFER, modelProg.fbo); // Offline Rendering
+			static const GLenum draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+			glDrawBuffers(2, draw_buffers);
+
+			glViewport(0, 0, window_width, window_height);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 			glUseProgram(modelProg.prog);
 
-			//glActiveTexture(GL_TEXTURE2);
-			//glBindTexture(GL_TEXTURE_2D, depthMap);
-			//glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
-
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_2D, depthMap);
+			glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
+			
 			glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(scene_m_matrix));
 			glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
 			glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
@@ -584,14 +605,8 @@ void My_Display()
 					glBindTexture(GL_TEXTURE_2D, mesh.textures.at(0).id);
 					glUniform1i(glGetUniformLocation(modelProg.prog, "tex"), 0);
 				}
-
-				glActiveTexture(GL_TEXTURE2);
-				glBindTexture(GL_TEXTURE_2D, model.meshes.at(i).shadow_tex);
-				glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
-
 				glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
 
-				glBindTexture(GL_TEXTURE_2D, 0);
 				glBindVertexArray(0);
 			}
 			glUseProgram(0);
@@ -601,7 +616,7 @@ void My_Display()
 			glUseProgram(modelProg.prog);
 			glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(trice_m_matrix));
 			glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
-			glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+			glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix)); 
 			glUniformMatrix4fv(glGetUniformLocation(modelProg.prog, "shadow_matrix"), 1, GL_FALSE, value_ptr(shadow_sbpv_matrix * trice_m_matrix));
 			glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 1);
 			glUniform1i(glGetUniformLocation(modelProg.prog, "normal_mapping_flag"), normal_mapping_enabled);
@@ -611,7 +626,7 @@ void My_Display()
 			glUniform3fv(glGetUniformLocation(modelProg.prog, "Ks"), 1, value_ptr(trice_mesh.mats.Ks));
 
 			glActiveTexture(GL_TEXTURE2);
-			glBindTexture(GL_TEXTURE_2D, trice.meshes.at(0).shadow_tex);
+			glBindTexture(GL_TEXTURE_2D, depthMap);
 			glUniform1i(glGetUniformLocation(modelProg.prog, "shadow_tex"), 2);
 
 			glActiveTexture(GL_TEXTURE1);
@@ -627,39 +642,36 @@ void My_Display()
 			glUniformMatrix4fv(modelProg.m_mat, 1, GL_FALSE, value_ptr(point_light_m_matrix));
 			glUniformMatrix4fv(modelProg.v_mat, 1, GL_FALSE, value_ptr(view_matrix));
 			glUniformMatrix4fv(modelProg.p_mat, 1, GL_FALSE, value_ptr(proj_matrix));
+			glUniform1i(glGetUniformLocation(modelProg.prog, "point_light_enabled"), point_light_enabled);
 			glUniform1i(glGetUniformLocation(modelProg.prog, "obj_id"), 2);
 
 			point_light.draw(modelProg.prog);
 			glUseProgram(0);
 			/********** End Render Point Light Sphere **********/
+
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			/***** End Render in Camera View *****/
+
+			/***** 3. Start Render in Screen View *****/
+			glUseProgram(finalProg.prog);
+			glBindVertexArray(final_vao);
+
+			glActiveTexture(GL_TEXTURE3);
+			glBindTexture(GL_TEXTURE_2D, originView);
+			glUniform1i(glGetUniformLocation(finalProg.prog, "originView"), 3);
+
+			glActiveTexture(GL_TEXTURE4);
+			glBindTexture(GL_TEXTURE_2D, brightView);
+			glUniform1i(glGetUniformLocation(finalProg.prog, "brightView"), 4);
+			glUniform1i(glGetUniformLocation(finalProg.prog, "deferred_enabled"), deferred_enabled);
+
+			glDisable(GL_DEPTH_TEST);
+			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+			glBindVertexArray(0);
+			glUseProgram(0);
+			/***** End Render in Screen View *****/
 		}
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		/***** End Render in Camera View *****/
-
-		/***** 3. Start Render in Screen View *****/
-		glViewport(0, 0, window_width, window_height);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		glUseProgram(finalProg.prog);
-		glBindVertexArray(final_vao);
-
-		glActiveTexture(GL_TEXTURE3);
-		glBindTexture(GL_TEXTURE_2D, originView);
-		glUniform1i(glGetUniformLocation(finalProg.prog, "originView"), 3);
-
-		glActiveTexture(GL_TEXTURE4);
-		glBindTexture(GL_TEXTURE_2D, brightView);
-		glUniform1i(glGetUniformLocation(finalProg.prog, "brightView"), 4);
-		glUniform1i(glGetUniformLocation(finalProg.prog, "deferred_enabled"), deferred_enabled);
-		// glUniform1i(glGetUniformLocation(finalProg.prog, "window_width"), window_width);
-		// glUniform1i(glGetUniformLocation(finalProg.prog, "window_height"), window_height);
-
-		glDisable(GL_DEPTH_TEST);
-		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-
-		glBindVertexArray(0);
-		glUseProgram(0);
-		/***** End Render in Screen View *****/
 	}
 
 	/***** 4. Start Deferred Shading *****/
@@ -762,27 +774,9 @@ void My_Reshape(int width, int height)
 	float fov = 80.0f;
 	proj_matrix = perspective(radians(fov), viewportAspect, 0.1f, 1000.0f);
 
-	glDeleteRenderbuffers(1, &gbuffer.rbo);
-	glDeleteTextures(5, &gbuffer.position_map);
-
-	glGenRenderbuffers(1, &gbuffer.rbo);
-	glBindRenderbuffer(GL_RENDERBUFFER, gbuffer.rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, width, height);
-
+	setupDepthMap();
 	setupGeometryBuffer();
-	//glBindTexture(GL_TEXTURE_2D, gbuffer.position_map);
-	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	//glBindTexture(GL_TEXTURE_2D, gbuffer.normal_map);
-	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	//glBindTexture(GL_TEXTURE_2D, gbuffer.ambient_map);
-	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	//glBindTexture(GL_TEXTURE_2D, gbuffer.diffuse_map);
-	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	//glBindTexture(GL_TEXTURE_2D, gbuffer.specular_map);
-	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	/***** Start Model Shader FBO & RBO *****/
 	setupBloomFBO();
-	/***** End Model Shader FBO & RBO *****/
 }
 
 void My_Timer(int val)
@@ -873,6 +867,10 @@ void My_Keyboard(unsigned char key, int x, int y)
 	case 'G':
 		deferred_flag = (deferred_flag + 1) % 5;
 		break;
+	case 'p':
+	case 'P':
+		point_light_enabled = !point_light_enabled;
+		break;
 	}
 }
 
@@ -946,8 +944,11 @@ int main(int argc, char *argv[])
 #endif
 	glutInitWindowPosition(100, 100);
 	glutInitWindowSize(1440, 900);
+	glutInitContextVersion(4, 2);
+	glutInitContextProfile(GLUT_CORE_PROFILE);
 	glutCreateWindow("Final Group 3 Indoor"); // You cannot use OpenGL functions before this line; The OpenGL context must be created first by glutCreateWindow()!
 #ifdef _MSC_VER
+	glewExperimental = GL_TRUE;
 	glewInit();
 #endif
 	dumpInfo();

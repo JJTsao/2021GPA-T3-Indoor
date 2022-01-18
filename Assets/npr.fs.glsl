@@ -44,5 +44,6 @@ void main()
 	}*/
 	
 	fragColor = color;
-	//fragColor = color * (intensity * 0.2 + 0.8);
+	// fragColor = vec4(0.5);
+	// fragColor = color * (intensity * 0.2 + 0.8);
 }

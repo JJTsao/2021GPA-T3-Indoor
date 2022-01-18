@@ -28,7 +28,8 @@ void main()
 		int sampler_count = (half_size * 2 + 1) * (half_size * 2 + 1);
 		vec4 gaussian_color = 1.5 * color_sum / sampler_count;
 
-		fragColor = texture(originView, tex_coord).rgba + gaussian_color;
+		// fragColor = texture(originView, tex_coord).rgba + gaussian_color;
+		fragColor = texture(brightView, tex_coord).rgba + texture(originView, tex_coord).rgba + gaussian_color;
 	} else if(deferred_enabled == 1) {
 		switch(deferred_flag) {
 			case 0:
